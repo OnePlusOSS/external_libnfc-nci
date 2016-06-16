@@ -15,7 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -227,55 +245,54 @@ tNFC_STATUS RW_SetActivatedTagType (tNFC_ACTIVATE_DEVT *p_activate_params, tRW_C
 #endif  /* RW_STATS_INCLUDED */
 
     rw_cb.p_cback = p_cback;
-    /* not a tag NFC_PROTOCOL_NFCIP1:   NFCDEP/LLCP - NFC-A or NFC-F */
-    if (NFC_PROTOCOL_T1T == p_activate_params->protocol)
+    switch (p_activate_params->protocol)
     {
-        /* Type1Tag    - NFC-A */
+    /* not a tag NFC_PROTOCOL_NFCIP1:   NFCDEP/LLCP - NFC-A or NFC-F */
+    case NFC_PROTOCOL_T1T:    /* Type1Tag    - NFC-A */
         if (p_activate_params->rf_tech_param.mode == NFC_DISCOVERY_TYPE_POLL_A)
         {
             status = rw_t1t_select (p_activate_params->rf_tech_param.param.pa.hr,
                                     p_activate_params->rf_tech_param.param.pa.nfcid1);
         }
-    }
-    else if (NFC_PROTOCOL_T2T == p_activate_params->protocol)
-    {
-        /* Type2Tag    - NFC-A */
+        break;
+
+    case NFC_PROTOCOL_T2T:   /* Type2Tag    - NFC-A */
         if (p_activate_params->rf_tech_param.mode == NFC_DISCOVERY_TYPE_POLL_A)
         {
             if (p_activate_params->rf_tech_param.param.pa.sel_rsp == NFC_SEL_RES_NFC_FORUM_T2T)
                 status      = rw_t2t_select ();
         }
-    }
-    else if (NFC_PROTOCOL_T3T == p_activate_params->protocol)
-    {
-        /* Type3Tag    - NFC-F */
+        break;
+
+    case NFC_PROTOCOL_T3T:   /* Type3Tag    - NFC-F */
         if (p_activate_params->rf_tech_param.mode == NFC_DISCOVERY_TYPE_POLL_F)
         {
             status = rw_t3t_select (p_activate_params->rf_tech_param.param.pf.nfcid2,
                                     p_activate_params->rf_tech_param.param.pf.mrti_check,
                                     p_activate_params->rf_tech_param.param.pf.mrti_update);
         }
-    }
-    else if (NFC_PROTOCOL_ISO_DEP == p_activate_params->protocol)
-    {
-        /* ISODEP/4A,4B- NFC-A or NFC-B */
+        break;
+
+    case NFC_PROTOCOL_ISO_DEP:     /* ISODEP/4A,4B- NFC-A or NFC-B */
+#if(NXP_EXTNS == TRUE)
+    case NFC_PROTOCOL_T3BT:
+#endif
         if (  (p_activate_params->rf_tech_param.mode == NFC_DISCOVERY_TYPE_POLL_B)
             ||(p_activate_params->rf_tech_param.mode == NFC_DISCOVERY_TYPE_POLL_A)  )
         {
             status          = rw_t4t_select ();
         }
-    }
-    else if (NFC_PROTOCOL_15693 == p_activate_params->protocol)
-    {
-        /* ISO 15693 */
+        break;
+
+    case NFC_PROTOCOL_15693:     /* ISO 15693 */
         if (p_activate_params->rf_tech_param.mode == NFC_DISCOVERY_TYPE_POLL_ISO15693)
         {
             status          = rw_i93_select (p_activate_params->rf_tech_param.param.pi93.uid);
         }
-    }
+        break;
     /* TODO set up callback for proprietary protocol */
-    else
-    {
+
+    default:
         RW_TRACE_ERROR0 ("RW_SetActivatedTagType Invalid protocol");
     }
 

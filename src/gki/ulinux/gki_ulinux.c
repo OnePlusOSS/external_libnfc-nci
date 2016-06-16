@@ -15,7 +15,6 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-#include <malloc.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <errno.h>
@@ -71,8 +70,9 @@ static pthread_cond_t   gki_timer_update_cond;
 #ifdef NO_GKI_RUN_RETURN
 static pthread_t            timer_thread_id = 0;
 #endif
-
-
+#if (NXP_EXTNS == TRUE)
+UINT8 gki_buf_init_done = FALSE;
+#endif
 /* For Android */
 
 #ifndef GKI_SHUTDOWN_EVT
@@ -84,10 +84,12 @@ typedef struct
     UINT8 task_id;          /* GKI task id */
     TASKPTR task_entry;     /* Task entry function*/
     UINT32 params;          /* Extra params to pass to task entry function */
-    pthread_cond_t* pCond;	/* for android*/
+    pthread_cond_t* pCond;  /* for android*/
     pthread_mutex_t* pMutex;  /* for android*/
 } gki_pthread_info_t;
 gki_pthread_info_t gki_pthread_info[GKI_MAX_TASKS];
+
+static struct tms buffer;
 
 /*******************************************************************************
 **
@@ -147,12 +149,21 @@ void GKI_init(void)
 {
     pthread_mutexattr_t attr;
     tGKI_OS             *p_os;
-
+#if (NXP_EXTNS == TRUE)
+    /* Added to avoid re-initialization of memory pool (memory leak) */
+    if(!gki_buf_init_done)
+    {
+        memset (&gki_cb, 0, sizeof (gki_cb));
+        gki_buffer_init();
+        gki_buf_init_done = TRUE;
+    }
+#else
     memset (&gki_cb, 0, sizeof (gki_cb));
-
     gki_buffer_init();
+#endif
+
     gki_timers_init();
-    gki_cb.com.OSTicks = (UINT32) times(0);
+    gki_cb.com.OSTicks = (UINT32) times(&buffer);
 
     pthread_mutexattr_init(&attr);
 
@@ -173,6 +184,9 @@ void GKI_init(void)
     p_os->no_timer_suspend = GKI_TIMER_TICK_RUN_COND;
     pthread_mutex_init(&p_os->gki_timer_mutex, NULL);
     pthread_cond_init(&p_os->gki_timer_cond, NULL);
+#if (NXP_EXTNS == TRUE)
+    pthread_mutexattr_destroy(&attr);
+#endif
 }
 
 
@@ -265,7 +279,10 @@ UINT8 GKI_create_task (TASKPTR task_entry, UINT8 task_id, INT8 *taskname, UINT16
               &attr1,
               (void *)gki_task_entry,
               &gki_pthread_info[task_id]);
-
+#if (NXP_EXTNS == TRUE)
+    pthread_attr_destroy(&attr1);
+    pthread_condattr_destroy(&attr);
+#endif
     if (ret != 0)
     {
          GKI_TRACE_2("pthread_create failed(%d), %s!", ret, taskname);
@@ -343,7 +360,6 @@ void GKI_shutdown(void)
 
 #if ( FALSE == GKI_PTHREAD_JOINABLE )
             i = 0;
-
             while ((gki_cb.com.OSWaitEvt[task_id - 1] != 0) && (++i < 10))
                 usleep(100 * 1000);
 #else
@@ -384,7 +400,6 @@ void GKI_shutdown(void)
     *p_run_cond = GKI_TIMER_TICK_EXIT_COND;
     if (oldCOnd == GKI_TIMER_TICK_STOP_COND)
         pthread_cond_signal( &gki_cb.os.gki_timer_cond );
-
 }
 
 /*******************************************************************************
@@ -492,8 +507,13 @@ void GKI_run (void *p_task_id)
     GKI_TRACE_1("%s enter", __func__);
     struct timespec delay;
     int err = 0;
+#if(NXP_EXTNS == TRUE)
+    UINT8 rtask = 0;
+#endif
     volatile int * p_run_cond = &gki_cb.os.no_timer_suspend;
-
+#if (NXP_EXTNS == TRUE)
+    int ret = 0;
+#endif
 #ifndef GKI_NO_TICK_STOP
     /* register start stop function which disable timer loop in GKI_run() when no timers are
      * in any GKI/BTA/BTU this should save power when BTLD is idle! */
@@ -509,16 +529,28 @@ void GKI_run (void *p_task_id)
 
     pthread_attr_init(&timer_attr);
     pthread_attr_setdetachstate(&timer_attr, PTHREAD_CREATE_DETACHED);
+#if (NXP_EXTNS == TRUE)
+    ret = pthread_create( &timer_thread_id,
+            &timer_attr,
+            timer_thread,
+            NULL);
+    pthread_attr_destroy(&timer_attr);
+    if (ret != 0)
+#else
     if (pthread_create( &timer_thread_id,
               &timer_attr,
               timer_thread,
               NULL) != 0 )
+#endif
     {
         GKI_TRACE_0("GKI_run: pthread_create failed to create timer_thread!");
         return GKI_FAILURE;
     }
 #else
     GKI_TRACE_2("GKI_run, run_cond(%x)=%d ", p_run_cond, *p_run_cond);
+#if(NXP_EXTNS == TRUE)
+    rtask = GKI_get_taskid();
+#endif
     for (;GKI_TIMER_TICK_EXIT_COND != *p_run_cond;)
     {
         do
@@ -548,6 +580,14 @@ void GKI_run (void *p_task_id)
          * block timer main thread till re-armed by  */
 #ifdef GKI_TICK_TIMER_DEBUG
         BT_TRACE_0( TRACE_LAYER_HCI, TRACE_TYPE_DEBUG, ">>> SUSPENDED GKI_timer_update()" );
+#endif
+#if(NXP_EXTNS == TRUE)
+        if (gki_cb.com.OSRdyTbl[rtask] == TASK_DEAD)
+        {
+            gki_cb.com.OSWaitEvt[rtask] = 0;
+            BT_TRACE_1( TRACE_LAYER_HCI, TRACE_TYPE_DEBUG, "GKI TASK_DEAD received. exit thread %d...", rtask );
+            gki_cb.os.thread_id[rtask] = 0;
+        }
 #endif
         if (GKI_TIMER_TICK_EXIT_COND != *p_run_cond) {
             GKI_TRACE_1("%s waiting timer mutex", __func__);
@@ -691,7 +731,7 @@ UINT16 GKI_wait (UINT16 flag, UINT32 timeout)
             pthread_cond_wait(&gki_cb.os.thread_evt_cond[rtask], &gki_cb.os.thread_evt_mutex[rtask]);
         }
 
-        /* TODO: check, this is probably neither not needed depending on phtread_cond_wait() implmentation,
+        /* TODO: check, this is probably neither not needed depending on phtread_cond_wait() implementation,
          e.g. it looks like it is implemented as a counter in which case multiple cond_signal
          should NOT be lost! */
         // we are waking up after waiting for some events, so refresh variables
@@ -927,7 +967,7 @@ void GKI_enable (void)
 {
     GKI_TRACE_0("GKI_enable");
     pthread_mutex_unlock(&gki_cb.os.GKI_mutex);
-/* 	pthread_mutex_xx is nesting save, no need for this: already_disabled = 0; */
+/*  pthread_mutex_xx is nesting save, no need for this: already_disabled = 0; */
     GKI_TRACE_0("Leaving GKI_enable");
     return;
 }
@@ -947,9 +987,9 @@ void GKI_disable (void)
 {
     //GKI_TRACE_0("GKI_disable");
 
-/*	pthread_mutex_xx is nesting save, no need for this: if (!already_disabled) {
+/*  pthread_mutex_xx is nesting save, no need for this: if (!already_disabled) {
     already_disabled = 1; */
-    		pthread_mutex_lock(&gki_cb.os.GKI_mutex);
+            pthread_mutex_lock(&gki_cb.os.GKI_mutex);
 /*  } */
     //GKI_TRACE_0("Leaving GKI_disable");
     return;
@@ -1036,7 +1076,7 @@ INT8 *GKI_get_time_stamp (INT8 *tbuf)
     UINT32 h_time;
     INT8   *p_out = tbuf;
 
-    gki_cb.com.OSTicks = times(0);
+    gki_cb.com.OSTicks = (UINT32) times(&buffer);
     ms_time = GKI_TICKS_TO_MS(gki_cb.com.OSTicks);
     s_time  = ms_time/100;   /* 100 Ticks per second */
     m_time  = s_time/60;
@@ -1124,7 +1164,7 @@ void *GKI_os_malloc (UINT32 size)
 void GKI_os_free (void *p_mem)
 {
     if(p_mem != NULL)
-		free(p_mem);
+        free(p_mem);
     return;
 }
 
@@ -1209,7 +1249,7 @@ void GKI_exit_task (UINT8 task_id)
 
     GKI_enable();
 
-	//GKI_send_event(task_id, EVENT_MASK(GKI_SHUTDOWN_EVT));
+    //GKI_send_event(task_id, EVENT_MASK(GKI_SHUTDOWN_EVT));
 
     GKI_TRACE_1("GKI_exit_task %d done", task_id);
     return;
@@ -1290,5 +1330,3 @@ void GKI_shiftup (UINT8 *p_dest, UINT8 *p_src, UINT32 len)
     for (xx = 0; xx < len; xx++)
         *pd++ = *ps++;
 }
-
-
