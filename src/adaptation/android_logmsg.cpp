@@ -15,6 +15,26 @@
  *  limitations under the License.
  *
  ******************************************************************************/
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
+
 #include "OverrideLog.h"
 #include "android_logmsg.h"
 #include "nfc_target.h"
@@ -28,6 +48,7 @@ extern UINT32 ScrProtocolTraceFlag;
 #define BTE_LOG_MAX_SIZE (BTE_LOG_BUF_SIZE - 12)
 #define MAX_LOGCAT_LINE 4096
 #define PRINT(s) __android_log_write (ANDROID_LOG_DEBUG, "BrcmNci", s)
+#define UNUSED(X) (void)X
 static char log_line [MAX_LOGCAT_LINE];
 static const char* sTable = "0123456789abcdef";
 static BOOLEAN sIsUseRaw = FALSE;
@@ -93,7 +114,7 @@ void ScrLog (UINT32 trace_set_mask, const char *fmt_str, ...)
 {
     static char buffer [BTE_LOG_BUF_SIZE];
     va_list ap;
-
+    UNUSED(trace_set_mask);
     va_start (ap, fmt_str);
     vsnprintf (buffer, BTE_LOG_MAX_SIZE, fmt_str, ap);
     va_end (ap);
@@ -116,6 +137,8 @@ void dumpbin(const char* data, int size, UINT32 trace_layer, UINT32 trace_type)
     char *line;
     int i, j, addr;
     const int width = 16;
+    UNUSED(trace_layer);
+    UNUSED(trace_type);
     if(size <= 0)
         return;
     for(i = 0; i < size / width; i++)
@@ -285,13 +308,47 @@ inline void byte2hex (const char* data, char** str)
     }
 
 
-    void DispSNEP (UINT8 local_sap, UINT8 remote_sap, BT_HDR *p_buf, BOOLEAN is_first, BOOLEAN is_rx) {}
-    void DispCHO (UINT8 *pMsg, UINT32 MsgLen, BOOLEAN is_rx) {}
-    void DispT3TagMessage(BT_HDR *p_msg, BOOLEAN is_rx) {}
-    void DispRWT4Tags (BT_HDR *p_buf, BOOLEAN is_rx) {}
-    void DispCET4Tags (BT_HDR *p_buf, BOOLEAN is_rx) {}
-    void DispRWI93Tag (BT_HDR *p_buf, BOOLEAN is_rx, UINT8 command_to_respond) {}
-    void DispNDEFMsg (UINT8 *pMsg, UINT32 MsgLen, BOOLEAN is_recv) {}
+    void DispSNEP (UINT8 local_sap, UINT8 remote_sap, BT_HDR *p_buf, BOOLEAN is_first, BOOLEAN is_rx)
+    {
+       UNUSED(local_sap);
+       UNUSED(remote_sap);
+       UNUSED(p_buf);
+       UNUSED(is_first);
+       UNUSED(is_rx);
+    }
+    void DispCHO (UINT8 *pMsg, UINT32 MsgLen, BOOLEAN is_rx)
+    {
+       UNUSED(pMsg);
+       UNUSED(MsgLen);
+       UNUSED(is_rx);
+    }
+    void DispT3TagMessage(BT_HDR *p_msg, BOOLEAN is_rx)
+    {
+       UNUSED(p_msg);
+       UNUSED(is_rx);
+    }
+    void DispRWT4Tags (BT_HDR *p_buf, BOOLEAN is_rx)
+    {
+       UNUSED(p_buf);
+       UNUSED(is_rx);
+    }
+    void DispCET4Tags (BT_HDR *p_buf, BOOLEAN is_rx)
+    {
+       UNUSED(p_buf);
+       UNUSED(is_rx);
+    }
+    void DispRWI93Tag (BT_HDR *p_buf, BOOLEAN is_rx, UINT8 command_to_respond)
+    {
+       UNUSED(p_buf);
+       UNUSED(is_rx);
+       UNUSED(command_to_respond);
+    }
+    void DispNDEFMsg (UINT8 *pMsg, UINT32 MsgLen, BOOLEAN is_recv)
+    {
+       UNUSED(pMsg);
+       UNUSED(MsgLen);
+       UNUSED(is_recv);
+    }
 
 
 /*******************************************************************************
@@ -315,7 +372,7 @@ void LogMsg (UINT32 trace_set_mask, const char *fmt_str, ...)
     va_end (ap);
     if (trace_type == TRACE_TYPE_ERROR)
         android_log_type = ANDROID_LOG_ERROR;
-    //__android_log_write (android_log_type, LOGMSG_TAG_NAME, buffer); //ruanbanmao modify
+    __android_log_write (android_log_type, LOGMSG_TAG_NAME, buffer);
 }
 
 

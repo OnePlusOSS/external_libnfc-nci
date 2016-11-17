@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2014 NXP Semiconductors
+ * Copyright (C) 2015 NXP Semiconductors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <string.h>
+/* ############################################### Header Includes ################################################ */
 #if ! defined (NXPLOG__H_INCLUDED)
 #    include "phNxpLog.h"
 #    include "phNxpConfig.h"
@@ -53,6 +53,26 @@ static uint8_t phNxpLog_SetGlobalLogLevel (void)
     uint8_t level = NXPLOG_DEFAULT_LOGLEVEL;
     unsigned long num = 0;
     char valueStr [PROPERTY_VALUE_MAX] = {0};
+
+    property_get("persist.oem.nfc.debug", valueStr, "0");
+    if (strcmp(valueStr, "1") == 0) {
+        property_set("nfc.app_log_level", "5");
+        property_set("nfc.nxp_log_level_global", "3");
+        property_set("nfc.nxp_log_level_extns", "3");
+        property_set("nfc.nxp_log_level_hal", "3");
+        property_set("nfc.nxp_log_level_nci", "3");
+        property_set("nfc.nxp_log_level_dnld", "3");
+        property_set("nfc.nxp_log_level_tml", "3");
+    } else {
+        property_set("nfc.app_log_level", "1");
+        property_set("nfc.nxp_log_level_global", "1");
+        property_set("nfc.nxp_log_level_extns", "1");
+        property_set("nfc.nxp_log_level_hal", "1");
+        property_set("nfc.nxp_log_level_nci", "1");
+        property_set("nfc.nxp_log_level_dnld", "1");
+        property_set("nfc.nxp_log_level_tml", "1");
+    }
+
 
     int len = property_get (PROP_NAME_NXPLOG_GLOBAL_LOGLEVEL, valueStr, "");
     if (len > 0)
@@ -253,4 +273,46 @@ void phNxpLog_InitializeLogLevel(void)
                 __FUNCTION__, gLog_level.global_log_level, gLog_level.dnld_log_level,
                     gLog_level.extns_log_level, gLog_level.hal_log_level, gLog_level.tml_log_level,
                     gLog_level.ncir_log_level, gLog_level.ncix_log_level);
+}
+
+
+/******************************************************************************
+ * Function         phNxpLog_EnableDisableLogLevel
+ *
+ * Description      This function can be called to enable/disable the log levels
+ *
+ *
+ *                  Log Level values:
+ *                      NXPLOG_LOG_SILENT_LOGLEVEL  0        * No trace to show
+ *                      NXPLOG_LOG_ERROR_LOGLEVEL   1        * Show Error trace only
+ *                      NXPLOG_LOG_WARN_LOGLEVEL    2        * Show Warning trace and Error trace
+ *                      NXPLOG_LOG_DEBUG_LOGLEVEL   3        * Show all traces
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+NFCSTATUS phNxpLog_EnableDisableLogLevel(uint8_t enable)
+{
+    static nci_log_level_t prevTraceLevel = {0,};
+    static uint8_t currState = 0x01;
+    NFCSTATUS status = NFCSTATUS_FAILED;
+    if(0x01 == enable && currState != 0x01)
+    {
+        memcpy(&gLog_level , &prevTraceLevel, sizeof(nci_log_level_t));
+        currState = 0x01;
+        status = NFCSTATUS_SUCCESS;
+    }
+    else if(0x00 == enable && currState != 0x00)
+    {
+        memcpy(&prevTraceLevel , &gLog_level, sizeof(nci_log_level_t));
+        gLog_level.hal_log_level   = 0;
+        gLog_level.extns_log_level = 0;
+        gLog_level.tml_log_level   = 0;
+        gLog_level.ncix_log_level  = 0;
+        gLog_level.ncir_log_level  = 0;
+        currState = 0x00;
+        status = NFCSTATUS_SUCCESS;
+    }
+
+    return status;
 }

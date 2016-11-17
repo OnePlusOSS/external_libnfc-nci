@@ -15,6 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 
 /******************************************************************************
@@ -63,6 +82,9 @@ enum
     NFA_DM_API_REG_VSC_EVT,
     NFA_DM_API_SEND_VSC_EVT,
     NFA_DM_TIMEOUT_DISABLE_EVT,
+#if(NXP_EXTNS == TRUE)
+    NFA_DM_API_SEND_NXP_EVT,
+#endif
     NFA_DM_MAX_EVT
 };
 
@@ -296,6 +318,7 @@ typedef UINT8 tNFA_DM_RF_DISC_EVT;
 #define NFA_DM_DISC_MASK_PAA_NFC_DEP            0x00000800
 #define NFA_DM_DISC_MASK_PFA_NFC_DEP            0x00001000
 #define NFA_DM_DISC_MASK_P_LEGACY               0x00002000  /* Legacy/proprietary/non-NFC Forum protocol (e.g Shanghai transit card) */
+#define NFA_DM_DISC_MASK_PB_T3BT                0x00004000
 #define NFA_DM_DISC_MASK_POLL                   0x0000FFFF
 
 #define NFA_DM_DISC_MASK_LA_T1T                 0x00010000
@@ -478,6 +501,10 @@ typedef struct
     tNFA_DM_CBACK              *p_dm_cback;         /* NFA DM callback                                      */
     TIMER_LIST_ENT              tle;
 
+#if(NXP_EXTNS == TRUE)
+    BOOLEAN                     presence_check_deact_pending; /* TRUE if deactivate while checking presence */
+    tNFA_DEACTIVATE_TYPE        presence_check_deact_type;    /* deactivate type                            */
+#endif
     /* NFC link connection management */
     tNFA_CONN_CBACK            *p_conn_cback;       /* callback for connection events       */
     tNFA_TECHNOLOGY_MASK        poll_mask;          /* technologies being polled            */
@@ -511,6 +538,9 @@ typedef struct
 
     /* NFCC power mode */
     UINT8                       nfcc_pwr_mode;          /* NFA_DM_PWR_MODE_FULL or NFA_DM_PWR_MODE_OFF_SLEEP */
+#if(NXP_EXTNS == TRUE)
+    UINT8                       eDtaMode;               /*For enable the DTA type modes. */
+#endif
 } tNFA_DM_CB;
 
 /* Internal function prototypes */
@@ -539,7 +569,11 @@ extern UINT8 *p_nfa_dm_gen_cfg;
 extern UINT8 nfa_ee_max_ee_cfg;
 extern tNCI_DISCOVER_MAPS *p_nfa_dm_interface_mapping;
 extern UINT8 nfa_dm_num_dm_interface_mapping;
-extern BOOLEAN nfa_poll_bail_out_mode;
+
+#if(NXP_EXTNS == TRUE)
+void nfa_dm_poll_disc_cback_dta_wrapper(tNFA_DM_RF_DISC_EVT event, tNFC_DISCOVER *p_data);
+extern unsigned char appl_dta_mode_flag;
+#endif
 
 /* NFA device manager control block */
 #if NFA_DYNAMIC_MEMORY == FALSE
@@ -598,7 +632,10 @@ BOOLEAN nfa_dm_ndef_dereg_hdlr (tNFA_DM_MSG *p_data);
 BOOLEAN nfa_dm_tout (tNFA_DM_MSG *p_data);
 BOOLEAN nfa_dm_act_reg_vsc (tNFA_DM_MSG *p_data);
 BOOLEAN nfa_dm_act_send_vsc (tNFA_DM_MSG *p_data);
+#if(NXP_EXTNS == TRUE)
+BOOLEAN nfa_dm_act_send_nxp(tNFA_DM_MSG *p_data);
 UINT16 nfa_dm_act_get_rf_disc_duration ();
+#endif
 BOOLEAN nfa_dm_act_disable_timeout (tNFA_DM_MSG *p_data);
 BOOLEAN nfa_dm_act_nfc_cback_data (tNFA_DM_MSG *p_data);
 
@@ -632,7 +669,8 @@ tNFC_STATUS nfa_dm_disc_sleep_wakeup (void);
 tNFC_STATUS nfa_dm_disc_start_kovio_presence_check (void);
 BOOLEAN nfa_dm_is_raw_frame_session (void);
 BOOLEAN nfa_dm_is_p2p_paused (void);
-
+void nfa_dm_p2p_prio_logic_cleanup (void);
+void nfa_dm_deact_ntf_timeout();
 
 #if (NFC_NFCEE_INCLUDED == FALSE)
 #define nfa_ee_get_tech_route(ps, ha) memset(ha, NFC_DH_ID, NFA_DM_MAX_TECH_ROUTE);
@@ -644,4 +682,3 @@ char *nfa_dm_nfc_revt_2_str (tNFC_RESPONSE_EVT event);
 
 
 #endif /* NFA_DM_INT_H */
-

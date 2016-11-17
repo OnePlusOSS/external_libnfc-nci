@@ -15,6 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 #include "OverrideLog.h"
 #include "NfcAdaptation.h"
 extern "C"
@@ -22,7 +41,6 @@ extern "C"
     #include "gki.h"
     #include "nfa_api.h"
     #include "nfc_int.h"
-    #include "vendor_cfg.h"
 }
 #include "config.h"
 #include "android_logmsg.h"
@@ -41,23 +59,28 @@ tHAL_NFC_CBACK* NfcAdaptation::mHalCallback = NULL;
 tHAL_NFC_DATA_CBACK* NfcAdaptation::mHalDataCallback = NULL;
 ThreadCondVar NfcAdaptation::mHalOpenCompletedEvent;
 ThreadCondVar NfcAdaptation::mHalCloseCompletedEvent;
+#if (NXP_EXTNS == TRUE)
+ThreadCondVar NfcAdaptation::mHalCoreResetCompletedEvent;
+ThreadCondVar NfcAdaptation::mHalCoreInitCompletedEvent;
+ThreadCondVar NfcAdaptation::mHalInitCompletedEvent;
+#endif
 
 UINT32 ScrProtocolTraceFlag = SCR_PROTO_TRACE_ALL; //0x017F00;
 UINT8 appl_trace_level = 0xff;
+#if (NXP_EXTNS == TRUE)
+UINT8 appl_dta_mode_flag = 0x00;
+#endif
 char bcm_nfc_location[120];
 char nci_hal_module[64];
 
 static UINT8 nfa_dm_cfg[sizeof ( tNFA_DM_CFG ) ];
-static UINT8 nfa_proprietary_cfg[sizeof ( tNFA_PROPRIETARY_CFG )];
 extern tNFA_DM_CFG *p_nfa_dm_cfg;
-extern tNFA_PROPRIETARY_CFG *p_nfa_proprietary_cfg;
 extern UINT8 nfa_ee_max_ee_cfg;
 extern const UINT8  nfca_version_string [];
 extern const UINT8  nfa_version_string [];
 static UINT8 deviceHostWhiteList [NFA_HCI_MAX_HOST_IN_NETWORK];
 static tNFA_HCI_CFG jni_nfa_hci_cfg;
 extern tNFA_HCI_CFG *p_nfa_hci_cfg;
-extern BOOLEAN nfa_poll_bail_out_mode;
 
 /*******************************************************************************
 **
@@ -145,16 +168,6 @@ void NfcAdaptation::Initialize ()
         nfa_ee_max_ee_cfg = num;
         ALOGD("%s: Overriding NFA_EE_MAX_EE_SUPPORTED to use %d", func, nfa_ee_max_ee_cfg);
     }
-    if ( GetNumValue ( NAME_NFA_POLL_BAIL_OUT_MODE, &num, sizeof ( num ) ) )
-    {
-        nfa_poll_bail_out_mode = num;
-        ALOGD("%s: Overriding NFA_POLL_BAIL_OUT_MODE to use %d", func, nfa_poll_bail_out_mode);
-    }
-
-    if ( GetStrValue ( NAME_NFA_PROPRIETARY_CFG, (char*)nfa_proprietary_cfg, sizeof ( tNFA_PROPRIETARY_CFG ) ) )
-    {
-        p_nfa_proprietary_cfg = (tNFA_PROPRIETARY_CFG*) &nfa_proprietary_cfg[0];
-    }
 
     //configure device host whitelist of HCI host ID's; see specification ETSI TS 102 622 V11.1.10
     //(2012-10), section 6.1.3.1
@@ -193,7 +206,36 @@ void NfcAdaptation::Initialize ()
     InitializeHalDeviceContext ();
     ALOGD ("%s: exit", func);
 }
+#if(NXP_EXTNS == TRUE)
+/*******************************************************************************
+**
+** Function:    NfcAdaptation::MinInitialize()
+**
+** Description: class initializer
+**
+** Returns:     none
+**
+*******************************************************************************/
+void NfcAdaptation::MinInitialize ()
+{
+    const char* func = "NfcAdaptation::MinInitialize";
+    ALOGD("%s: enter", func);
+    GKI_init ();
+    GKI_enable ();
+    GKI_create_task ((TASKPTR)NFCA_TASK, BTU_TASK, (INT8*)"NFCA_TASK", 0, 0, (pthread_cond_t*)NULL, NULL);
+    {
+        AutoThreadMutex guard(mCondVar);
+        GKI_create_task ((TASKPTR)Thread, MMI_TASK, (INT8*)"NFCA_THREAD", 0, 0, (pthread_cond_t*)NULL, NULL);
+        mCondVar.wait();
+    }
 
+    mHalDeviceContext = NULL;
+    mHalCallback =  NULL;
+    memset (&mHalEntryFuncs, 0, sizeof(mHalEntryFuncs));
+    InitializeHalDeviceContext ();
+    ALOGD ("%s: exit", func);
+}
+#endif
 /*******************************************************************************
 **
 ** Function:    NfcAdaptation::Finalize()
@@ -323,11 +365,13 @@ void NfcAdaptation::InitializeHalDeviceContext ()
     mHalEntryFuncs.close = HalClose;
     mHalEntryFuncs.core_initialized = HalCoreInitialized;
     mHalEntryFuncs.write = HalWrite;
+#if(NXP_EXTNS == TRUE)
+    mHalEntryFuncs.ioctl = HalIoctl;
+#endif
     mHalEntryFuncs.prediscover = HalPrediscover;
     mHalEntryFuncs.control_granted = HalControlGranted;
     mHalEntryFuncs.power_cycle = HalPowerCycle;
     mHalEntryFuncs.get_max_ee = HalGetMaxNfcee;
-
     ret = hw_get_module (nci_hal_module, &hw_module);
     if (ret == 0)
     {
@@ -392,7 +436,6 @@ void NfcAdaptation::HalOpen (tHAL_NFC_CBACK *p_hal_cback, tHAL_NFC_DATA_CBACK* p
         mHalDeviceContext->open (mHalDeviceContext, HalDeviceContextCallback, HalDeviceContextDataCallback);
     }
 }
-
 /*******************************************************************************
 **
 ** Function:    NfcAdaptation::HalClose
@@ -466,6 +509,36 @@ void NfcAdaptation::HalWrite (UINT16 data_len, UINT8* p_data)
         mHalDeviceContext->write (mHalDeviceContext, data_len, p_data);
     }
 }
+
+#if(NXP_EXTNS == TRUE)
+/*******************************************************************************
+**
+** Function:    NfcAdaptation::HalIoctl
+**
+** Description: Calls ioctl to the Nfc driver.
+**              If called with a arg value of 0x01 than wired access requested,
+**              status of the requst would be updated to p_data.
+**              If called with a arg value of 0x00 than wired access will be
+**              released, status of the requst would be updated to p_data.
+**              If called with a arg value of 0x02 than current p61 state would be
+**              updated to p_data.
+**
+** Returns:     -1 or 0.
+**
+*******************************************************************************/
+int NfcAdaptation::HalIoctl (long arg, void* p_data)
+{
+    const char* func = "NfcAdaptation::HalIoctl";
+    ALOGD ("%s", func);
+    if (mHalDeviceContext)
+    {
+        return (mHalDeviceContext->ioctl (mHalDeviceContext, arg, p_data));
+    }
+    return -1;
+}
+
+#endif
+
 
 /*******************************************************************************
 **
@@ -593,12 +666,37 @@ void NfcAdaptation::DownloadFirmware ()
 {
     const char* func = "NfcAdaptation::DownloadFirmware";
     ALOGD ("%s: enter", func);
+#if (NXP_EXTNS == TRUE)
+    static UINT8 cmd_reset_nci[] = {0x20,0x00,0x01,0x00};
+    static UINT8 cmd_init_nci[]  = {0x20,0x01,0x00};
+    static UINT8 cmd_reset_nci_size = sizeof(cmd_reset_nci) / sizeof(UINT8);
+    static UINT8 cmd_init_nci_size  = sizeof(cmd_init_nci)  / sizeof(UINT8);
+    UINT8 p_core_init_rsp_params;
+#endif
     HalInitialize ();
 
     mHalOpenCompletedEvent.lock ();
     ALOGD ("%s: try open HAL", func);
     HalOpen (HalDownloadFirmwareCallback, HalDownloadFirmwareDataCallback);
     mHalOpenCompletedEvent.wait ();
+#if (NXP_EXTNS == TRUE)
+    /* Send a CORE_RESET and CORE_INIT to the NFCC. This is required because when calling
+     * HalCoreInitialized, the HAL is going to parse the conf file and send NCI commands
+     * to the NFCC. Hence CORE-RESET and CORE-INIT have to be sent prior to this.
+     */
+    mHalCoreResetCompletedEvent.lock();
+    ALOGD("%s: send CORE_RESET", func);
+    HalWrite(cmd_reset_nci_size , cmd_reset_nci);
+    mHalCoreResetCompletedEvent.wait();
+    mHalCoreInitCompletedEvent.lock();
+    ALOGD("%s: send CORE_INIT", func);
+    HalWrite(cmd_init_nci_size , cmd_init_nci);
+    mHalCoreInitCompletedEvent.wait();
+    mHalInitCompletedEvent.lock ();
+    ALOGD ("%s: try init HAL", func);
+    HalCoreInitialized (&p_core_init_rsp_params);
+    mHalInitCompletedEvent.wait ();
+#endif
 
     mHalCloseCompletedEvent.lock ();
     ALOGD ("%s: try close HAL", func);
@@ -630,6 +728,12 @@ void NfcAdaptation::HalDownloadFirmwareCallback (nfc_event_t event, nfc_status_t
             mHalOpenCompletedEvent.signal ();
             break;
         }
+    case HAL_NFC_POST_INIT_CPLT_EVT:
+        {
+            ALOGD ("%s: HAL_NFC_POST_INIT_CPLT_EVT", func);
+            mHalInitCompletedEvent.signal ();
+            break;
+        }
     case HAL_NFC_CLOSE_CPLT_EVT:
         {
             ALOGD ("%s: HAL_NFC_CLOSE_CPLT_EVT", func);
@@ -650,6 +754,19 @@ void NfcAdaptation::HalDownloadFirmwareCallback (nfc_event_t event, nfc_status_t
 *******************************************************************************/
 void NfcAdaptation::HalDownloadFirmwareDataCallback (uint16_t data_len, uint8_t* p_data)
 {
+#if (NXP_EXTNS == TRUE)
+    if (data_len > 3)
+    {
+        if (p_data[0] == 0x40 && p_data[1] == 0x00)
+        {
+            mHalCoreResetCompletedEvent.signal();
+        }
+        else if (p_data[0] == 0x40 && p_data[1] == 0x01)
+        {
+            mHalCoreInitCompletedEvent.signal();
+        }
+    }
+#endif
 }
 
 
