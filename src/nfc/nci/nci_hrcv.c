@@ -15,6 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 
 /******************************************************************************
@@ -307,9 +326,11 @@ void nci_proc_ee_management_rsp (BT_HDR *p_msg)
     UINT8   *pp, len, op_code;
     tNFC_RESPONSE_CBACK *p_cback = nfc_cb.p_resp_cback;
     tNFC_NFCEE_DISCOVER_REVT    nfcee_discover;
-    tNFC_NFCEE_INFO_REVT        nfcee_info;
     tNFC_NFCEE_MODE_SET_REVT    mode_set;
-    tNFC_RESPONSE   *p_evt = (tNFC_RESPONSE *) &nfcee_info;
+#if (NXP_EXTNS == TRUE) && (NXP_WIRED_MODE_STANDBY == TRUE)
+    tNFC_NFCEE_EE_PWR_LNK_REVT  pwr_lnk_ctrl;
+#endif
+    void   *p_evt = NULL;
     tNFC_RESPONSE_EVT event = NFC_NFCEE_INFO_REVT;
     UINT8   *p_old = nfc_cb.last_cmd;
 
@@ -323,7 +344,7 @@ void nci_proc_ee_management_rsp (BT_HDR *p_msg)
     switch (op_code)
     {
     case NCI_MSG_NFCEE_DISCOVER:
-        p_evt                       = (tNFC_RESPONSE *) &nfcee_discover;
+        p_evt                       = (void *) &nfcee_discover;
         nfcee_discover.status       = *pp++;
         nfcee_discover.num_nfcee    = *pp++;
 
@@ -334,7 +355,7 @@ void nci_proc_ee_management_rsp (BT_HDR *p_msg)
         break;
 
     case NCI_MSG_NFCEE_MODE_SET:
-        p_evt                   = (tNFC_RESPONSE *) &mode_set;
+        p_evt                   = (void *) &mode_set;
         mode_set.status         = *pp;
         mode_set.nfcee_id       = 0;
         event                   = NFC_NFCEE_MODE_SET_REVT;
@@ -342,6 +363,15 @@ void nci_proc_ee_management_rsp (BT_HDR *p_msg)
         mode_set.mode           = *p_old++;
         break;
 
+#if (NXP_EXTNS == TRUE) && (NXP_WIRED_MODE_STANDBY == TRUE)
+    case NCI_MSG_NFCEE_PWR_LNK_CTRL:
+        p_evt                   = (tNFC_RESPONSE *) &pwr_lnk_ctrl;
+        pwr_lnk_ctrl.status         = *pp;
+        pwr_lnk_ctrl.nfcee_id       = 0;
+        event                       = NFC_NFCEE_PWR_LNK_CTRL_REVT;
+        pwr_lnk_ctrl.nfcee_id       = *p_old++;
+        break;
+#endif
     default:
         p_cback = NULL;
         NFC_TRACE_ERROR1 ("unknown opcode:0x%x", op_code);
@@ -367,7 +397,7 @@ void nci_proc_ee_management_ntf (BT_HDR *p_msg)
     UINT8                 *pp, len, op_code;
     tNFC_RESPONSE_CBACK   *p_cback = nfc_cb.p_resp_cback;
     tNFC_NFCEE_INFO_REVT  nfcee_info;
-    tNFC_RESPONSE         *p_evt   = (tNFC_RESPONSE *) &nfcee_info;
+    void* p_evt   = (void*) &nfcee_info;
     tNFC_RESPONSE_EVT     event    = NFC_NFCEE_INFO_REVT;
     UINT8                 xx;
     UINT8                 yy;
@@ -411,7 +441,19 @@ void nci_proc_ee_management_ntf (BT_HDR *p_msg)
 
         for (xx = 0; xx < nfcee_info.num_tlvs; xx++, p_tlv++)
         {
+#if(NXP_EXTNS == TRUE)
+            if(*pp < 0xA0)
+            {
+                p_tlv->tag = *pp++;
+            }
+            else
+            {
+                p_tlv->tag  = *pp++;
+                p_tlv->tag  = (p_tlv->tag << 8) | *pp++;
+            }
+#else
             p_tlv->tag  = *pp++;
+#endif
             p_tlv->len  = yy = *pp++;
             NFC_TRACE_DEBUG2 ("tag:0x%x, len:0x%x", p_tlv->tag, p_tlv->len);
             if (p_tlv->len > NFC_MAX_EE_INFO)
@@ -461,6 +503,39 @@ void nci_proc_prop_rsp (BT_HDR *p_msg)
         (*p_cback) ((tNFC_VS_EVT) (NCI_RSP_BIT|op_code), p_msg->len, p_evt);
 }
 
+#if(NXP_EXTNS == TRUE)
+/*******************************************************************************
+**
+** Function         nci_proc_prop_nxp_rsp
+**
+** Description      Process NXP NCI responses
+**
+** Returns          void
+**
+*******************************************************************************/
+void nci_proc_prop_nxp_rsp (BT_HDR *p_msg)
+{
+    UINT8   *p;
+    UINT8   *p_evt;
+    UINT8   *pp, len, op_code;
+    tNFC_VS_CBACK   *p_cback = (tNFC_VS_CBACK *)nfc_cb.p_vsc_cback;
+
+    /* find the start of the NCI message and parse the NCI header */
+    p   = p_evt = (UINT8 *) (p_msg + 1) + p_msg->offset;
+    pp  = p+1;
+    NCI_MSG_PRS_HDR1 (pp, op_code);
+    len = *pp++;
+
+    /*If there's a pending/stored command, restore the associated address of the callback function */
+    if (p_cback)
+    {
+        (*p_cback) ((tNFC_VS_EVT) (NCI_RSP_BIT|op_code), p_msg->len, p_evt);
+        nfc_cb.p_vsc_cback = NULL;
+    }
+    nfc_ncif_update_window ();
+}
+#endif
+
 /*******************************************************************************
 **
 ** Function         nci_proc_prop_ntf
@@ -482,6 +557,18 @@ void nci_proc_prop_ntf (BT_HDR *p_msg)
     pp  = p+1;
     NCI_MSG_PRS_HDR1 (pp, op_code);
     len = *pp++;
+
+#if(NXP_EXTNS == TRUE)
+    NFC_TRACE_DEBUG1 ("nci_proc_prop_ntf:op_code =0x%x", op_code);
+    switch(op_code)
+    {
+    case NCI_MSG_RF_WTX:
+        nfc_ncif_proc_rf_wtx_ntf (p, p_msg->len);
+        return;
+    default:
+        break;
+    }
+#endif
 
     for (i = 0; i < NFC_NUM_VS_CBACKS; i++)
     {

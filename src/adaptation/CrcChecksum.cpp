@@ -15,6 +15,26 @@
  *  limitations under the License.
  *
  ******************************************************************************/
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
+
 #include "OverrideLog.h"
 #include "CrcChecksum.h"
 #include <sys/types.h>
@@ -22,6 +42,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string>
+
+#undef LOG_TAG
 #define LOG_TAG "NfcNciHal"
 
 
@@ -117,7 +139,7 @@ BOOLEAN crcChecksumVerifyIntegrity (const char* filename)
         close (fileStream);
         if ((actualReadCrc == sizeof(checksum)) && (data.size() > 0))
         {
-            ALOGD ("%s: data size=%u", __FUNCTION__, data.size());
+            ALOGD ("%s: data size=%zu", __FUNCTION__, data.size());
             if (checksum == crcChecksumCompute ((const unsigned char*) data.data(), data.size()))
                 isGood = TRUE;
             else

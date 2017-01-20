@@ -16,6 +16,25 @@
  *
  ******************************************************************************/
 
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -47,7 +66,9 @@
 #define RW_T4T_STATE_SET_READ_ONLY              0x06    /* convert tag to read only             */
 
 #define RW_T4T_STATE_NDEF_FORMAT                0x07    /* performing NDEF format               */
-
+#if(NXP_EXTNS == TRUE)
+#define RW_T3BT_STATE_GET_PROP_DATA             0x08
+#endif
 /* sub state */
 #define RW_T4T_SUBSTATE_WAIT_SELECT_APP         0x00    /* waiting for response of selecting AID    */
 #define RW_T4T_SUBSTATE_WAIT_SELECT_CC          0x01    /* waiting for response of selecting CC     */
@@ -67,6 +88,10 @@
 #define RW_T4T_SUBSTATE_WAIT_CREATE_NDEF        0x0E
 #define RW_T4T_SUBSTATE_WAIT_WRITE_CC           0x0F
 #define RW_T4T_SUBSTATE_WAIT_WRITE_NDEF         0x10
+#if(NXP_EXTNS == TRUE)
+#define RW_T3BT_SUBSTATE_WAIT_GET_ATTRIB        0x11
+#define RW_T3BT_SUBSTATE_WAIT_GET_PUPI          0x12
+#endif
 
 #if (BT_TRACE_VERBOSE == TRUE)
 static char *rw_t4t_get_state_name (UINT8 state);
@@ -90,13 +115,17 @@ static BOOLEAN rw_t4t_create_ccfile (void);
 static BOOLEAN rw_t4t_create_ndef (void);
 static BOOLEAN rw_t4t_write_cc (void);
 static BOOLEAN rw_t4t_write_ndef (void);
+#if(NXP_EXTNS == TRUE)
+static BOOLEAN rw_t3bt_get_pupi (void);
+static void rw_t3Bt_sm_get_card_id(BT_HDR *p_r_apdu);
+#endif
+static void rw_t4t_sm_ndef_format (BT_HDR  *p_r_apdu);
 static void rw_t4t_handle_error (tNFC_STATUS status, UINT8 sw1, UINT8 sw2);
 static void rw_t4t_sm_detect_ndef (BT_HDR *p_r_apdu);
 static void rw_t4t_sm_read_ndef (BT_HDR *p_r_apdu);
 static void rw_t4t_sm_update_ndef (BT_HDR  *p_r_apdu);
 static void rw_t4t_sm_set_readonly (BT_HDR  *p_r_apdu);
 static void rw_t4t_data_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_data);
-static void rw_t4t_sm_ndef_format (BT_HDR  *p_r_apdu);
 
 /*******************************************************************************
 **
@@ -120,7 +149,7 @@ static BOOLEAN rw_t4t_send_to_lower (BT_HDR *p_c_apdu)
     }
 
     nfc_start_quick_timer (&rw_cb.tcb.t4t.timer, NFC_TTYPE_RW_T4T_RESPONSE,
-            (RW_T4T_TOUT_RESP * QUICK_TIMER_TICKS_PER_SEC) / 1000);
+                           (RW_T4T_TOUT_RESP * QUICK_TIMER_TICKS_PER_SEC) / 1000);
 
     return TRUE;
 }
@@ -153,7 +182,7 @@ static BOOLEAN rw_t4t_get_hw_version (void)
     UINT8_TO_BE_STREAM (p, T4T_CMD_DES_CLASS);
     UINT8_TO_BE_STREAM (p, T4T_CMD_INS_GET_HW_VERSION);
     UINT16_TO_BE_STREAM (p, 0x0000);
-    UINT8_TO_BE_FIELD (p, 0x00);
+    UINT8_TO_BE_FIELD(p,0x00);
 
     p_c_apdu->len = T4T_CMD_MAX_HDR_SIZE;
 
@@ -193,7 +222,7 @@ static BOOLEAN rw_t4t_get_sw_version (void)
     UINT8_TO_BE_STREAM (p, T4T_CMD_DES_CLASS);
     UINT8_TO_BE_STREAM (p, T4T_ADDI_FRAME_RESP);
     UINT16_TO_BE_STREAM (p, 0x0000);
-    UINT8_TO_BE_FIELD (p, 0x00);
+    UINT8_TO_BE_FIELD(p,0x00);
 
     p_c_apdu->len = T4T_CMD_MAX_HDR_SIZE;
 
@@ -214,24 +243,24 @@ static BOOLEAN rw_t4t_get_sw_version (void)
 ** Returns          TRUE if success
 **
 *******************************************************************************/
-static BOOLEAN rw_t4t_update_version_details (BT_HDR *p_r_apdu)
+static BOOLEAN rw_t4t_update_version_details(BT_HDR *p_r_apdu)
 {
     tRW_T4T_CB      *p_t4t = &rw_cb.tcb.t4t;
-    UINT8           *p;
-    UINT16          major_version, minor_version;
+    UINT8 *p;
+    UINT16 major_version, minor_version;
 
     p = (UINT8 *) (p_r_apdu + 1) + p_r_apdu->offset;
-    major_version = *(p + 3);
-    minor_version = *(p + 4);
+    major_version = *(p+3);
+    minor_version = *(p+4);
 
-    if ((T4T_DESEV0_MAJOR_VERSION == major_version) &&
-        (T4T_DESEV0_MINOR_VERSION == minor_version))
+    if((T4T_DESEV0_MAJOR_VERSION == major_version) &&
+            (T4T_DESEV0_MINOR_VERSION == minor_version))
     {
-        p_t4t->card_size = 0xEDE;
+            p_t4t->card_size = 0xEDE;
     }
-    else if (major_version >= T4T_DESEV1_MAJOR_VERSION)
+    else if(major_version >= T4T_DESEV1_MAJOR_VERSION)
     {
-        p_t4t->card_type = T4T_TYPE_DESFIRE_EV1;
+            p_t4t->card_type = T4T_TYPE_DESFIRE_EV1;
         switch (*(p + 5))
         {
         case T4T_SIZE_IDENTIFIER_2K:
@@ -283,7 +312,7 @@ static BOOLEAN rw_t4t_get_uid_details (void)
     UINT8_TO_BE_STREAM (p, T4T_CMD_DES_CLASS);
     UINT8_TO_BE_STREAM (p, T4T_ADDI_FRAME_RESP);
     UINT16_TO_BE_STREAM (p, 0x0000);
-    UINT8_TO_BE_FIELD (p, 0x00);
+    UINT8_TO_BE_FIELD(p,0x00);
 
     p_c_apdu->len = T4T_CMD_MAX_HDR_SIZE;
 
@@ -325,13 +354,13 @@ static BOOLEAN rw_t4t_create_app (void)
     UINT8_TO_BE_STREAM (p, T4T_CMD_DES_CLASS);
     UINT8_TO_BE_STREAM (p, T4T_CMD_CREATE_AID);
     UINT16_TO_BE_STREAM (p, 0x0000);
-    if (p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
+    if(p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
     {
         UINT8_TO_BE_STREAM (p, (T4T_CMD_MAX_HDR_SIZE + sizeof(df_name) + 2));
         UINT24_TO_BE_STREAM (p, T4T_DES_EV1_NFC_APP_ID);
         UINT16_TO_BE_STREAM (p, 0x0F21);                  /*Key settings and no.of keys */
         UINT16_TO_BE_STREAM (p, 0x05E1);                  /* ISO file ID */
-        ARRAY_TO_BE_STREAM (p, df_name, sizeof(df_name));   /*DF file name */
+        ARRAY_TO_BE_STREAM (p, df_name, (int)sizeof(df_name));   /*DF file name */
         UINT8_TO_BE_STREAM (p, 0x00);                      /* Le */
         p_c_apdu->len = 20;
     }
@@ -381,17 +410,16 @@ static BOOLEAN rw_t4t_select_app (void)
     UINT8_TO_BE_STREAM (p, T4T_CMD_DES_CLASS);
     UINT8_TO_BE_STREAM (p, T4T_CMD_SELECT_APP);
     UINT16_TO_BE_STREAM (p, 0x0000);
-    UINT8_TO_BE_STREAM (p, 0x03);                      /* Lc: length of wrapped data */
-    if (p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
+    UINT8_TO_BE_STREAM(p,0x03);                      /* Lc: length of wrapped data */
+    if(p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
     {
-        UINT24_TO_BE_STREAM (p, T4T_DES_EV1_NFC_APP_ID);
+        UINT24_TO_BE_STREAM(p, T4T_DES_EV1_NFC_APP_ID);
     }
     else
     {
         UINT24_TO_BE_STREAM(p, T4T_DES_EV0_NFC_APP_ID);
     }
-
-    UINT8_TO_BE_STREAM (p, 0x00);                      /* Le */
+    UINT8_TO_BE_STREAM(p,0x00);                      /* Le */
 
     p_c_apdu->len = 9;
 
@@ -399,7 +427,6 @@ static BOOLEAN rw_t4t_select_app (void)
     {
         return FALSE;
     }
-
     return TRUE;
 }
 
@@ -432,7 +459,7 @@ static BOOLEAN rw_t4t_create_ccfile (void)
     UINT8_TO_BE_STREAM (p, T4T_CMD_DES_CLASS);
     UINT8_TO_BE_STREAM (p, T4T_CMD_CREATE_DATAFILE);
     UINT16_TO_BE_STREAM (p, 0x0000);
-    if (p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
+    if(p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
     {
         UINT8_TO_BE_STREAM (p, 0x09);                    /* Lc: length of wrapped data */
         UINT8_TO_BE_STREAM (p, 0x01);                    /* EV1 CC file id             */
@@ -443,19 +470,17 @@ static BOOLEAN rw_t4t_create_ccfile (void)
         UINT8_TO_BE_STREAM (p, 0x07);               /* Lc: length of wrapped data */
         UINT8_TO_BE_STREAM (p, 0x03);               /* DESFire CC file id         */
     }
+    UINT8_TO_BE_STREAM(p,0x00);                   /* COMM settings              */
+    UINT16_TO_BE_STREAM(p,0xEEEE);                /* Access rights              */
+    UINT24_TO_BE_STREAM(p,0x0F0000);              /* Set file size              */
+    UINT8_TO_BE_STREAM(p,0x00);                   /* Le                         */
 
-    UINT8_TO_BE_STREAM (p, 0x00);                   /* COMM settings              */
-    UINT16_TO_BE_STREAM (p, 0xEEEE);                /* Access rights              */
-    UINT24_TO_BE_STREAM (p, 0x0F0000);              /* Set file size              */
-    UINT8_TO_BE_STREAM (p, 0x00);                   /* Le                         */
-
-    p_c_apdu->len = (p_t4t->card_type == T4T_TYPE_DESFIRE_EV1) ? 15 : 13;
+    p_c_apdu->len = (p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)?15:13;
 
     if (!rw_t4t_send_to_lower (p_c_apdu))
     {
         return FALSE;
     }
-
     return TRUE;
 }
 
@@ -488,7 +513,7 @@ static BOOLEAN rw_t4t_create_ndef (void)
     UINT8_TO_BE_STREAM (p, T4T_CMD_DES_CLASS);
     UINT8_TO_BE_STREAM (p, T4T_CMD_CREATE_DATAFILE);
     UINT16_TO_BE_STREAM (p, 0x0000);
-    if (p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
+    if(p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
     {
         UINT8_TO_BE_STREAM (p, 0x09);                   /* Lc: length of wrapped data */
         UINT8_TO_BE_STREAM (p, 0x02);                   /* DESFEv1 NDEF file id       */
@@ -506,13 +531,12 @@ static BOOLEAN rw_t4t_create_ndef (void)
     UINT8_TO_BE_STREAM (p, 0x00);                       /* Set card size              */
     UINT8_TO_BE_STREAM (p, 0x00);                       /* Le                         */
 
-    p_c_apdu->len = (p_t4t->card_type == T4T_TYPE_DESFIRE_EV1) ? 15 : 13;
+    p_c_apdu->len = (p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)?15:13;
 
     if (!rw_t4t_send_to_lower (p_c_apdu))
     {
         return FALSE;
     }
-
     return TRUE;
 }
 
@@ -546,8 +570,8 @@ static BOOLEAN rw_t4t_write_cc (void)
     UINT8_TO_BE_STREAM (p, T4T_CMD_DES_CLASS);
     UINT8_TO_BE_STREAM (p, T4T_CMD_DES_WRITE);
     UINT16_TO_BE_STREAM (p, 0x0000);
-    UINT8_TO_BE_STREAM (p, 0x16);                    /* Lc: length of wrapped data  */
-    if (p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
+    UINT8_TO_BE_STREAM(p,0x16);                    /* Lc: length of wrapped data  */
+    if(p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
     {
         CCFileBytes[2]  = 0x20;
         CCFileBytes[11] = p_t4t->card_size >> 8;
@@ -558,11 +582,10 @@ static BOOLEAN rw_t4t_write_cc (void)
     {
         UINT8_TO_BE_STREAM (p, 0x03);
     }
-
-    UINT24_TO_BE_STREAM (p, 0x000000);              /* Set the offset              */
-    UINT24_TO_BE_STREAM (p, 0x0F0000);              /* Set available length        */
-    ARRAY_TO_BE_STREAM (p, CCFileBytes, sizeof(CCFileBytes));
-    UINT8_TO_BE_STREAM (p, 0x00);                    /* Le                         */
+    UINT24_TO_BE_STREAM(p, 0x000000);              /* Set the offset              */
+    UINT24_TO_BE_STREAM(p, 0x0F0000);              /* Set available length        */
+    ARRAY_TO_BE_STREAM(p, CCFileBytes, (int)sizeof(CCFileBytes));
+    UINT8_TO_BE_STREAM(p,0x00);                    /* Le                         */
 
     p_c_apdu->len = 28;
 
@@ -570,7 +593,6 @@ static BOOLEAN rw_t4t_write_cc (void)
     {
         return FALSE;
     }
-
     return TRUE;
 }
 
@@ -603,20 +625,19 @@ static BOOLEAN rw_t4t_write_ndef (void)
     UINT8_TO_BE_STREAM (p, T4T_CMD_DES_CLASS);
     UINT8_TO_BE_STREAM (p, T4T_CMD_DES_WRITE);
     UINT16_TO_BE_STREAM (p, 0x0000);
-    UINT8_TO_BE_STREAM (p, 0x09);                    /* Lc: length of wrapped data  */
-    if (p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
+    UINT8_TO_BE_STREAM(p,0x09);                    /* Lc: length of wrapped data  */
+    if(p_t4t->card_type == T4T_TYPE_DESFIRE_EV1)
     {
-        UINT8_TO_BE_STREAM (p, 0x02);               /* DESFEv1 Ndef file id        */
+        UINT8_TO_BE_STREAM(p, 0x02);               /* DESFEv1 Ndef file id        */
     }
     else
     {
         UINT8_TO_BE_STREAM (p, 0x04);
     }
-
-    UINT24_TO_BE_STREAM (p, 0x000000);              /* Set the offset              */
-    UINT24_TO_BE_STREAM (p, 0x020000);              /* Set available length        */
-    UINT16_TO_BE_STREAM (p, 0x0000);                /* Ndef file bytes             */
-    UINT8_TO_BE_STREAM (p, 0x00);                    /* Le                          */
+    UINT24_TO_BE_STREAM(p, 0x000000);              /* Set the offset              */
+    UINT24_TO_BE_STREAM(p, 0x020000);              /* Set available length        */
+    UINT16_TO_BE_STREAM(p, 0x0000);                /* Ndef file bytes             */
+    UINT8_TO_BE_STREAM(p,0x00);                    /* Le                          */
 
     p_c_apdu->len = 15;
 
@@ -624,10 +645,41 @@ static BOOLEAN rw_t4t_write_ndef (void)
     {
         return FALSE;
     }
-
     return TRUE;
 }
 
+#if(NXP_EXTNS == TRUE)
+static BOOLEAN rw_t3bt_get_pupi (void)
+{
+    tRW_T4T_CB  *p_t4t = &rw_cb.tcb.t4t;
+    BT_HDR      *p_c_apdu;
+    UINT8       *p;
+
+    p_c_apdu = (BT_HDR *) GKI_getpoolbuf (NFC_RW_POOL_ID);
+
+    if (!p_c_apdu)
+    {
+        RW_TRACE_ERROR0 ("rw_t3bt_get_pupi (): Cannot allocate buffer");
+        return FALSE;
+    }
+
+    p_c_apdu->offset = NCI_MSG_OFFSET_SIZE + NCI_DATA_HDR_SIZE;
+    p = (UINT8 *) (p_c_apdu + 1) + p_c_apdu->offset;
+
+    UINT8_TO_BE_STREAM (p, 0x00);
+    UINT8_TO_BE_STREAM (p, 0x36);
+    UINT16_TO_BE_STREAM (p, 0x0000);
+    UINT8_TO_BE_STREAM(p,0x08);                    /* Lc: length of wrapped data  */
+
+    p_c_apdu->len = 0x05;
+
+    if (!rw_t4t_send_to_lower (p_c_apdu))
+    {
+        return FALSE;
+    }
+    return TRUE;
+}
+#endif
 /*******************************************************************************
 **
 ** Function         rw_t4t_select_file
@@ -1099,7 +1151,12 @@ static void rw_t4t_handle_error (tNFC_STATUS status, UINT8 sw1, UINT8 sw2)
             event = RW_T4T_NDEF_FORMAT_CPLT_EVT;
             rw_data.status = NFC_STATUS_FAILED;
             break;
-
+#if(NXP_EXTNS == TRUE)
+        case RW_T3BT_STATE_GET_PROP_DATA:
+            event = RW_T3BT_RAW_READ_CPLT_EVT;
+            rw_data.status = NFC_STATUS_FAILED;
+            break;
+#endif
         default:
             event = RW_T4T_MAX_EVT;
             break;
@@ -1127,7 +1184,7 @@ static void rw_t4t_handle_error (tNFC_STATUS status, UINT8 sw1, UINT8 sw2)
 ** Returns          none
 **
 *******************************************************************************/
-static void rw_t4t_sm_ndef_format (BT_HDR *p_r_apdu)
+static void rw_t4t_sm_ndef_format(BT_HDR *p_r_apdu)
 {
     tRW_T4T_CB  *p_t4t = &rw_cb.tcb.t4t;
     UINT8       *p, type, length;
@@ -1148,9 +1205,9 @@ static void rw_t4t_sm_ndef_format (BT_HDR *p_r_apdu)
     {
     case RW_T4T_SUBSTATE_WAIT_GET_HW_VERSION:
         p += (p_r_apdu->len - 1);
-        if (*(p) == T4T_ADDI_FRAME_RESP)
+        if(*(p) == T4T_ADDI_FRAME_RESP)
         {
-            if (!rw_t4t_get_sw_version ())
+            if(!rw_t4t_get_sw_version())
             {
                 rw_t4t_handle_error (NFC_STATUS_FAILED, 0, 0);
             }
@@ -1167,18 +1224,16 @@ static void rw_t4t_sm_ndef_format (BT_HDR *p_r_apdu)
 
     case RW_T4T_SUBSTATE_WAIT_GET_SW_VERSION:
         p += (p_r_apdu->len - 1);
-        if (*(p) == T4T_ADDI_FRAME_RESP)
+        if(*(p) == T4T_ADDI_FRAME_RESP)
         {
-            if (!rw_t4t_update_version_details (p_r_apdu))
+            if(!rw_t4t_update_version_details(p_r_apdu))
             {
                 rw_t4t_handle_error (NFC_STATUS_FAILED, 0, 0);
             }
-
-            if (!rw_t4t_get_uid_details ())
+            if(!rw_t4t_get_uid_details())
             {
                 rw_t4t_handle_error (NFC_STATUS_FAILED, 0, 0);
             }
-
             p_t4t->sub_state = RW_T4T_SUBSTATE_WAIT_GET_UID;
         }
         else
@@ -1190,13 +1245,13 @@ static void rw_t4t_sm_ndef_format (BT_HDR *p_r_apdu)
     case RW_T4T_SUBSTATE_WAIT_GET_UID:
         p += (p_r_apdu->len - T4T_RSP_STATUS_WORDS_SIZE);
         BE_STREAM_TO_UINT16 (status_words, p);
-        if (status_words != 0x9100)
+        if(status_words != 0x9100)
         {
-            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p - 2), *(p - 1));
+            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p-2), *(p-1));
         }
         else
         {
-            if (!rw_t4t_create_app ())
+            if(!rw_t4t_create_app())
             {
                 rw_t4t_handle_error (NFC_STATUS_FAILED, 0, 0);
             }
@@ -1211,18 +1266,17 @@ static void rw_t4t_sm_ndef_format (BT_HDR *p_r_apdu)
     case RW_T4T_SUBSTATE_WAIT_CREATE_APP:
         p += (p_r_apdu->len - T4T_RSP_STATUS_WORDS_SIZE);
         BE_STREAM_TO_UINT16 (status_words, p);
-        if (status_words == 0x91DE) /* DUPLICATE_ERROR, file already exist*/
+        if(status_words == 0x91DE) /* DUPLICATE_ERROR, file already exist*/
         {
             status_words = 0x9100;
         }
-
-        if (status_words != 0x9100)
+        if(status_words != 0x9100)
         {
-            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p - 2), *(p - 1));
+            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p-2), *(p-1));
         }
         else
         {
-            if (!rw_t4t_select_app ())
+            if(!rw_t4t_select_app())
             {
                 rw_t4t_handle_error (NFC_STATUS_FAILED, 0, 0);
             }
@@ -1230,19 +1284,20 @@ static void rw_t4t_sm_ndef_format (BT_HDR *p_r_apdu)
             {
                 p_t4t->sub_state = RW_T4T_SUBSTATE_WAIT_SELECT_APP;
             }
+
         }
         break;
 
     case RW_T4T_SUBSTATE_WAIT_SELECT_APP:
         p += (p_r_apdu->len - T4T_RSP_STATUS_WORDS_SIZE);
         BE_STREAM_TO_UINT16 (status_words, p);
-        if (status_words != 0x9100)
+        if(status_words != 0x9100)
         {
-            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p - 2), *(p - 1));
+            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p-2), *(p-1));
         }
         else
         {
-            if (!rw_t4t_create_ccfile ())
+            if(!rw_t4t_create_ccfile())
             {
                 rw_t4t_handle_error (NFC_STATUS_FAILED, 0, 0);
             }
@@ -1257,18 +1312,17 @@ static void rw_t4t_sm_ndef_format (BT_HDR *p_r_apdu)
     case RW_T4T_SUBSTATE_WAIT_CREATE_CC:
         p += (p_r_apdu->len - T4T_RSP_STATUS_WORDS_SIZE);
         BE_STREAM_TO_UINT16 (status_words, p);
-        if (status_words == 0x91DE) /* DUPLICATE_ERROR, file already exist*/
+        if(status_words == 0x91DE) /* DUPLICATE_ERROR, file already exist*/
         {
             status_words = 0x9100;
         }
-
-        if (status_words != 0x9100)
+        if(status_words != 0x9100)
         {
-            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p - 2), *(p - 1));
+            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p-2), *(p-1));
         }
         else
         {
-            if (!rw_t4t_create_ndef ())
+            if(!rw_t4t_create_ndef())
             {
                 rw_t4t_handle_error (NFC_STATUS_FAILED, 0, 0);
             }
@@ -1276,24 +1330,24 @@ static void rw_t4t_sm_ndef_format (BT_HDR *p_r_apdu)
             {
                 p_t4t->sub_state = RW_T4T_SUBSTATE_WAIT_CREATE_NDEF;
             }
+
         }
         break;
 
     case RW_T4T_SUBSTATE_WAIT_CREATE_NDEF:
         p += (p_r_apdu->len - T4T_RSP_STATUS_WORDS_SIZE);
         BE_STREAM_TO_UINT16 (status_words, p);
-        if (status_words == 0x91DE) /* DUPLICATE_ERROR, file already exist*/
+        if(status_words == 0x91DE) /* DUPLICATE_ERROR, file already exist*/
         {
             status_words = 0x9100;
         }
-
-        if (status_words != 0x9100)
+        if(status_words != 0x9100)
         {
-            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p - 2), *(p - 1));
+            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p-2), *(p-1));
         }
         else
         {
-            if (!rw_t4t_write_cc ())
+            if(!rw_t4t_write_cc())
             {
                 rw_t4t_handle_error (NFC_STATUS_FAILED, 0, 0);
             }
@@ -1301,19 +1355,20 @@ static void rw_t4t_sm_ndef_format (BT_HDR *p_r_apdu)
             {
                 p_t4t->sub_state = RW_T4T_SUBSTATE_WAIT_WRITE_CC;
             }
+
         }
         break;
 
     case RW_T4T_SUBSTATE_WAIT_WRITE_CC:
         p += (p_r_apdu->len - T4T_RSP_STATUS_WORDS_SIZE);
         BE_STREAM_TO_UINT16 (status_words, p);
-        if (status_words != 0x9100)
+        if(status_words != 0x9100)
         {
-            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p - 2), *(p - 1));
+            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p-2), *(p-1));
         }
         else
         {
-            if (!rw_t4t_write_ndef ())
+            if(!rw_t4t_write_ndef())
             {
                 rw_t4t_handle_error (NFC_STATUS_FAILED, 0, 0);
             }
@@ -1327,13 +1382,13 @@ static void rw_t4t_sm_ndef_format (BT_HDR *p_r_apdu)
     case RW_T4T_SUBSTATE_WAIT_WRITE_NDEF:
         p += (p_r_apdu->len - T4T_RSP_STATUS_WORDS_SIZE);
         BE_STREAM_TO_UINT16 (status_words, p);
-        if (status_words != 0x9100)
+        if(status_words != 0x9100)
         {
-            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p - 2), *(p - 1));
+            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p-2), *(p-1));
         }
         else
         {
-            p_t4t->state = RW_T4T_STATE_IDLE;
+            p_t4t->state       = RW_T4T_STATE_IDLE;
             if (rw_cb.p_cback)
             {
                 rw_data.ndef.status   = NFC_STATUS_OK;
@@ -1350,11 +1405,81 @@ static void rw_t4t_sm_ndef_format (BT_HDR *p_r_apdu)
 
     default:
         RW_TRACE_ERROR1 ("rw_t4t_sm_ndef_format (): unknown sub_state=%d", p_t4t->sub_state);
-        rw_t4t_handle_error (NFC_STATUS_FAILED, 0, 0);
+        rw_t4t_handle_error(NFC_STATUS_FAILED,0,0);
         break;
     }
 }
 
+#if(NXP_EXTNS == TRUE)
+static void rw_t3Bt_sm_get_card_id(BT_HDR *p_r_apdu)
+{
+    tRW_T4T_CB  *p_t4t = &rw_cb.tcb.t4t;
+    UINT8       *p, type, length;
+    UINT16      status_words, nlen;
+    tRW_DATA    rw_data;
+
+#if (BT_TRACE_VERBOSE == TRUE)
+    RW_TRACE_DEBUG2 ("rw_t3Bt_sm_get_id (): sub_state:%s (%d)",
+                      rw_t4t_get_sub_state_name (p_t4t->sub_state), p_t4t->sub_state);
+#else
+    RW_TRACE_DEBUG1 ("rw_t3Bt_sm_get_id (): sub_state=%d", p_t4t->sub_state);
+#endif
+
+    /* get status words */
+    p = (UINT8 *) (p_r_apdu + 1) + p_r_apdu->offset;
+
+    switch (p_t4t->sub_state)
+    {
+    case RW_T3BT_SUBSTATE_WAIT_GET_ATTRIB:
+        if((p_r_apdu->len == 0x00) &&
+           ((*p != 0x00) && (*p++ != 0x00)))
+           {
+               rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p-2), *(p-1));
+           }
+        else
+        {
+            if(!rw_t3bt_get_pupi())
+            {
+                rw_t4t_handle_error (NFC_STATUS_FAILED, 0, 0);
+            }
+            else
+            {
+                p_t4t->sub_state = RW_T3BT_SUBSTATE_WAIT_GET_PUPI;
+            }
+        }
+        break;
+
+    case RW_T3BT_SUBSTATE_WAIT_GET_PUPI:
+        p += (p_r_apdu->len - 3);
+        BE_STREAM_TO_UINT16 (status_words, p);
+        if(status_words != 0x9000)
+        {
+            rw_t4t_handle_error (NFC_STATUS_CMD_NOT_CMPLTD, *(p-2), *(p-1));
+        }
+        else
+        {
+            UINT8 rsp_len = p_r_apdu->len - 3;
+            p = (UINT8 *) (p_r_apdu + 1) + p_r_apdu->offset; //"p" points to start of response
+            p_t4t->state       = RW_T4T_STATE_IDLE;
+            nfa_rw_update_pupi_id(p, rsp_len);
+            if (rw_cb.p_cback)
+            {
+                (*(rw_cb.p_cback)) (RW_T3BT_RAW_READ_CPLT_EVT, &rw_data);
+            }
+            else
+            {
+                RW_TRACE_ERROR0 ("rw_t3Bt_sm_get_id (): NULL callback");
+            }
+        }
+        break;
+
+    default:
+        RW_TRACE_ERROR1 ("rw_t3Bt_sm_get_id (): unknown sub_state=%d", p_t4t->sub_state);
+        rw_t4t_handle_error(NFC_STATUS_FAILED,0,0);
+        break;
+    }
+}
+#endif
 /*******************************************************************************
 **
 ** Function         rw_t4t_sm_detect_ndef
@@ -1918,6 +2043,7 @@ static void rw_t4t_data_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_
     tRW_T4T_CB *p_t4t    = &rw_cb.tcb.t4t;
     BT_HDR     *p_r_apdu;
     tRW_DATA    rw_data;
+    (void)conn_id;
 
 #if (BT_TRACE_VERBOSE == TRUE)
     UINT8  begin_state   = p_t4t->state;
@@ -1961,6 +2087,25 @@ static void rw_t4t_data_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_
     case NFC_DATA_CEVT:
         p_r_apdu = (BT_HDR *) p_data->data.p_data;
         break;
+
+#if (NXP_EXTNS == TRUE)
+    case NFC_RF_WTX_CEVT:
+        if(p_t4t->state == RW_T4T_STATE_IDLE)
+        {
+            /* WTX received for raw frame sent
+             * forward to upper layer without parsing */
+            if (rw_cb.p_cback)
+            {
+                (*(rw_cb.p_cback)) (RW_T4T_RAW_FRAME_RF_WTX_EVT, &rw_data);
+            }
+        }
+        else
+        {
+            nfc_start_quick_timer (&p_t4t->timer, NFC_TTYPE_RW_T4T_RESPONSE,
+                                  (RW_T4T_TOUT_RESP * QUICK_TIMER_TICKS_PER_SEC) / 1000);
+        }
+        return;
+#endif
 
     default:
         return;
@@ -2024,9 +2169,15 @@ static void rw_t4t_data_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_
         GKI_freebuf (p_r_apdu);
         break;
     case RW_T4T_STATE_NDEF_FORMAT:
-        rw_t4t_sm_ndef_format (p_r_apdu);
+        rw_t4t_sm_ndef_format(p_r_apdu);
         GKI_freebuf (p_r_apdu);
         break;
+#if(NXP_EXTNS == TRUE)
+    case RW_T3BT_STATE_GET_PROP_DATA:
+        rw_t3Bt_sm_get_card_id(p_r_apdu);
+        GKI_freebuf (p_r_apdu);
+        break;
+#endif
     default:
         RW_TRACE_ERROR1 ("rw_t4t_data_cback (): invalid state=%d", p_t4t->state);
         GKI_freebuf (p_r_apdu);
@@ -2052,7 +2203,7 @@ static void rw_t4t_data_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_
 ** Returns          NFC_STATUS_OK if success
 **
 *******************************************************************************/
-tNFC_STATUS RW_T4tFormatNDef (void)
+tNFC_STATUS RW_T4tFormatNDef(void)
 {
     RW_TRACE_API0 ("RW_T4tFormatNDef ()");
 
@@ -2063,13 +2214,11 @@ tNFC_STATUS RW_T4tFormatNDef (void)
         return NFC_STATUS_FAILED;
     }
 
-    rw_cb.tcb.t4t.card_type = 0x00;
-
-    if (!rw_t4t_get_hw_version ())
+        rw_cb.tcb.t4t.card_type = 0x00;
+    if(!rw_t4t_get_hw_version())
     {
         return NFC_STATUS_FAILED;
     }
-
     rw_cb.tcb.t4t.state = RW_T4T_STATE_NDEF_FORMAT;
     rw_cb.tcb.t4t.sub_state = RW_T4T_SUBSTATE_WAIT_GET_HW_VERSION;
 
@@ -2409,6 +2558,42 @@ tNFC_STATUS RW_T4tSetNDefReadOnly (void)
     return (retval);
 }
 
+#if(NXP_EXTNS == TRUE)
+tNFC_STATUS RW_T3BtGetPupiID(void)
+{
+    BT_HDR      *p_c_apdu;
+    UINT8       *p;
+
+    p_c_apdu = (BT_HDR *) GKI_getpoolbuf (NFC_RW_POOL_ID);
+
+    if (!p_c_apdu)
+    {
+        RW_TRACE_ERROR0 ("RW_T3BtGetPupiID (): Cannot allocate buffer");
+        return FALSE;
+    }
+
+    p_c_apdu->offset = NCI_MSG_OFFSET_SIZE + NCI_DATA_HDR_SIZE;
+    p = (UINT8 *) (p_c_apdu + 1) + p_c_apdu->offset;
+
+    UINT8_TO_BE_STREAM (p, 0x1D);
+    UINT16_TO_BE_STREAM (p, 0x0000);
+    UINT16_TO_BE_STREAM (p, 0x0000);
+    UINT16_TO_BE_STREAM(p,0x0008);
+    UINT16_TO_BE_STREAM (p, 0x0100);
+
+    p_c_apdu->len = 0x09;
+
+    if (!rw_t4t_send_to_lower (p_c_apdu))
+    {
+        return FALSE;
+    }
+
+    rw_cb.tcb.t4t.state = RW_T3BT_STATE_GET_PROP_DATA;
+    rw_cb.tcb.t4t.sub_state = RW_T3BT_SUBSTATE_WAIT_GET_ATTRIB;
+    return TRUE;
+}
+#endif
+
 #if (BT_TRACE_VERBOSE == TRUE)
 /*******************************************************************************
 **
@@ -2493,6 +2678,12 @@ static char *rw_t4t_get_sub_state_name (UINT8 sub_state)
         return ("WAIT_WRITE_CC");
     case RW_T4T_SUBSTATE_WAIT_WRITE_NDEF:
         return ("WAIT_WRITE_NDEF");
+#if(NXP_EXTNS == TRUE)
+    case RW_T3BT_SUBSTATE_WAIT_GET_ATTRIB:
+        return ("WAIT_GET_ATTRIB");
+    case RW_T3BT_SUBSTATE_WAIT_GET_PUPI:
+        return ("WAIT_GET_PUPI");
+#endif
     default:
         return ("???? UNKNOWN SUBSTATE");
     }

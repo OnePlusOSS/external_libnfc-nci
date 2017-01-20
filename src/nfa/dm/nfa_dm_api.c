@@ -15,7 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -29,6 +47,10 @@
 #include "nfa_ce_int.h"
 #include "nfa_sys_int.h"
 #include "ndef_utils.h"
+#if(NXP_EXTNS == TRUE)
+UINT32 gFelicaReaderMode;
+tHAL_NFC_CONTEXT hal_Initcntxt;
+#endif
 
 /*****************************************************************************
 **  Constants
@@ -54,23 +76,36 @@
 void NFA_Init(tHAL_NFC_ENTRY *p_hal_entry_tbl)
 {
     NFA_TRACE_API0 ("NFA_Init ()");
+#if(NXP_EXTNS == TRUE)
+    hal_Initcntxt.hal_entry_func = p_hal_entry_tbl;
+#endif
     nfa_sys_init();
     nfa_dm_init();
-    nfa_p2p_init();
-    nfa_cho_init();
-    nfa_snep_init(FALSE);
-    nfa_rw_init();
-    nfa_ce_init();
-    nfa_ee_init();
-    if (nfa_ee_max_ee_cfg != 0)
+#if(NXP_EXTNS == TRUE)
+    if(hal_Initcntxt.boot_mode == NFA_NORMAL_BOOT_MODE)
     {
-        nfa_dm_cb.get_max_ee    = p_hal_entry_tbl->get_max_ee;
-        nfa_hci_init();
+#endif
+        nfa_p2p_init();
+        nfa_cho_init();
+        nfa_snep_init(FALSE);
+        nfa_rw_init();
+        nfa_ce_init();
+        nfa_ee_init();
+        if (nfa_ee_max_ee_cfg != 0)
+        {
+            nfa_dm_cb.get_max_ee    = p_hal_entry_tbl->get_max_ee;
+
+            nfa_hci_init();
+        }
+#if(NXP_EXTNS == TRUE)
     }
-
-
+#endif
     /* Initialize NFC module */
+#if(NXP_EXTNS == TRUE)
+    NFC_Init (&hal_Initcntxt);
+#else
     NFC_Init (p_hal_entry_tbl);
+#endif
 }
 
 /*******************************************************************************
@@ -121,6 +156,7 @@ tNFA_STATUS NFA_Enable (tNFA_DM_CBACK        *p_dm_cback,
 
     return (NFA_STATUS_FAILED);
 }
+
 
 /*******************************************************************************
 **
@@ -221,11 +257,33 @@ tNFA_STATUS NFA_GetConfig (UINT8 num_ids,
                            tNFA_PMID *p_param_ids)
 {
     tNFA_DM_API_GET_CONFIG *p_msg;
+#if(NXP_EXTNS == TRUE)
+    UINT8 bytes;
+    UINT8 propConfigCnt;
 
     NFA_TRACE_API1 ("NFA_GetConfig (): num_ids: %i", num_ids);
+    //NXP_EXTN code added to handle propritory config IDs
+    UINT32 idx = 0;
+    UINT8 *params =  p_param_ids;
+    propConfigCnt=0;
 
+    for(idx=0; idx<num_ids; idx++)
+    {
+        if(*params == 0xA0)
+        {
+            params++;
+            propConfigCnt++;
+        }
+        params++;
+    }
 
+    bytes = (num_ids - propConfigCnt) + (propConfigCnt<<1);
+
+    if ((p_msg = (tNFA_DM_API_GET_CONFIG *) GKI_getbuf ((UINT16) (sizeof (tNFA_DM_API_GET_CONFIG) + bytes))) != NULL)
+#else
+    NFA_TRACE_API1 ("NFA_GetConfig (): num_ids: %i", num_ids);
     if ((p_msg = (tNFA_DM_API_GET_CONFIG *) GKI_getbuf ((UINT16) (sizeof (tNFA_DM_API_GET_CONFIG) + num_ids))) != NULL)
+#endif
     {
         p_msg->hdr.event = NFA_DM_API_GET_CONFIG_EVT;
 
@@ -233,7 +291,11 @@ tNFA_STATUS NFA_GetConfig (UINT8 num_ids,
         p_msg->p_pmids = (tNFA_PMID *) (p_msg+1);
 
         /* Copy the param IDs */
+#if(NXP_EXTNS == TRUE)
+        memcpy (p_msg->p_pmids, p_param_ids, bytes);
+#else
         memcpy (p_msg->p_pmids, p_param_ids, num_ids);
+#endif
 
         nfa_sys_sendmsg (p_msg);
 
@@ -499,6 +561,38 @@ tNFA_STATUS NFA_DisableListening (void)
     return (NFA_STATUS_FAILED);
 }
 
+/*******************************************************************************
+**
+** Function         NFA_DisablePassiveListening
+**
+** Description      Disable Passive listening
+**                  NFA_LISTEN_DISABLED_EVT will be returned after stopping listening.
+**                  This function is called to exclude listen at eSE wired mode session open.
+**
+** Note:            If RF discovery is started, NFA_StopRfDiscovery()/NFA_RF_DISCOVERY_STOPPED_EVT
+**                  should happen before calling this function
+**
+** Returns          NFA_STATUS_OK if successfully initiated
+**                  NFA_STATUS_FAILED otherwise
+**
+*******************************************************************************/
+tNFA_STATUS NFA_DisablePassiveListening (void)
+{
+    BT_HDR *p_msg;
+
+    NFA_TRACE_API0 ("NFA_DisablePassiveListening ()");
+
+    if ((p_msg = (BT_HDR *) GKI_getbuf (sizeof (BT_HDR))) != NULL)
+    {
+        p_msg->event = NFA_DM_API_DISABLE_PASSIVE_LISTENING_EVT;
+
+        nfa_sys_sendmsg (p_msg);
+
+        return (NFA_STATUS_OK);
+    }
+
+    return (NFA_STATUS_FAILED);
+}
 /*******************************************************************************
 **
 ** Function         NFA_PauseP2p
@@ -865,7 +959,11 @@ tNFA_STATUS NFA_SendRawFrame (UINT8  *p_raw_data,
     NFA_TRACE_API1 ("NFA_SendRawFrame () data_len:%d", data_len);
 
     /* Validate parameters */
-    if ((data_len == 0) || (p_raw_data == NULL))
+#if(NXP_NFCC_EMPTY_DATA_PACKET == TRUE)
+    if (((data_len == 0 ) || (p_raw_data == NULL)) && (!(nfa_dm_cb.disc_cb.disc_state == NFA_DM_RFST_LISTEN_ACTIVE && nfa_dm_cb.disc_cb.activated_protocol == NFA_PROTOCOL_T3T)))
+#else
+         if ((data_len == 0) || (p_raw_data == NULL))
+#endif
         return (NFA_STATUS_INVALID_PARAM);
 
     size = BT_HDR_SIZE + NCI_MSG_OFFSET_SIZE + NCI_DATA_HDR_SIZE + data_len;
@@ -877,7 +975,14 @@ tNFA_STATUS NFA_SendRawFrame (UINT8  *p_raw_data,
         p_msg->len    = data_len;
 
         p = (UINT8 *) (p_msg + 1) + p_msg->offset;
-        memcpy (p, p_raw_data, data_len);
+#if(NXP_NFCC_EMPTY_DATA_PACKET == TRUE)
+        if(p_raw_data != NULL)
+        {
+            memcpy (p, p_raw_data, data_len);
+        }
+#else
+         memcpy (p, p_raw_data, data_len);
+#endif
 
         nfa_sys_sendmsg (p_msg);
 
@@ -1185,6 +1290,54 @@ tNFA_STATUS NFA_SendVsCommand (UINT8            oid,
     return (NFA_STATUS_FAILED);
 }
 
+#if(NXP_EXTNS == TRUE)
+/*******************************************************************************
+**
+** Function         NFA_SendNxpNciCommand
+**
+** Description      This function is called to send an NXP NCI Vendor Specific
+**                  command to NFCC.
+**
+**                  cmd_params_len  - The command parameter len
+**                  p_cmd_params    - The command parameter
+**                  p_cback         - The callback function to receive the command
+**
+** Returns          NFA_STATUS_OK if successfully initiated
+**                  NFA_STATUS_FAILED otherwise
+**
+*******************************************************************************/
+tNFA_STATUS NFA_SendNxpNciCommand (UINT8            cmd_params_len,
+                                   UINT8            *p_cmd_params,
+                                   tNFA_VSC_CBACK    *p_cback)
+{
+    tNFA_DM_API_SEND_VSC *p_msg;
+    UINT16  size = sizeof(tNFA_DM_API_SEND_VSC) + cmd_params_len;
+
+    if ((p_msg = (tNFA_DM_API_SEND_VSC *) GKI_getbuf (size)) != NULL)
+    {
+        p_msg->hdr.event        = NFA_DM_API_SEND_NXP_EVT;
+        p_msg->p_cback          = p_cback;
+        if (cmd_params_len && p_cmd_params)
+        {
+            p_msg->cmd_params_len   = cmd_params_len;
+            p_msg->p_cmd_params     = (UINT8 *)(p_msg + 1);
+            memcpy (p_msg->p_cmd_params, p_cmd_params, cmd_params_len);
+        }
+        else
+        {
+            p_msg->cmd_params_len   = 0;
+            p_msg->p_cmd_params     = NULL;
+        }
+
+        nfa_sys_sendmsg (p_msg);
+
+        return (NFA_STATUS_OK);
+    }
+
+    return (NFA_STATUS_FAILED);
+}
+#endif
+
 /*******************************************************************************
 **
 ** Function         NFA_SetTraceLevel
@@ -1202,4 +1355,153 @@ UINT8 NFA_SetTraceLevel (UINT8 new_level)
 
     return (nfa_sys_cb.trace_level);
 }
+#if(NXP_EXTNS == TRUE)
+/*******************************************************************************
+**
+** Function       NFA_SetReaderMode
+**
+** Description:
+**    This function enable/disable  reader mode. In reader mode, even though if
+**    P2P & CE from UICC is detected, Priority will be given to TypeF UICC read.
+**    Its currently implemented for TypeF
+**
+**    ReaderModeFlag   Enable/Disable Reader Mode
+**    Technologies     Type of technologies to be set for Reader mode
+**                     Currently not used and reader mode is enabled for TypeF Only
+**
+** Returns:
+**    void
+*******************************************************************************/
+void NFA_SetReaderMode (BOOLEAN ReaderModeFlag, UINT32 Technologies)
+{
+    (void)Technologies;
 
+    NFA_TRACE_API1 ("NFA_SetReaderMode =0x%x", ReaderModeFlag);
+    gFelicaReaderMode = ReaderModeFlag;
+    return;
+}
+
+/*******************************************************************************
+**
+** Function         NFA_SetBootMode
+**
+** Description      This function enables the boot mode for NFC.
+**                  boot_mode  0 NORMAL_BOOT 1 FAST_BOOT
+**                  By default , the mode is set to NORMAL_BOOT.
+
+**
+** Returns          none
+**
+*******************************************************************************/
+void NFA_SetBootMode(UINT8 boot_mode)
+{
+    hal_Initcntxt.boot_mode = boot_mode;
+}
+/*******************************************************************************
+**
+** Function:        NFA_EnableDtamode
+**
+** Description:     Enable DTA Mode
+**
+** Returns:         none:
+**
+*******************************************************************************/
+void  NFA_EnableDtamode (tNFA_eDtaModes eDtaMode)
+{
+    NFA_TRACE_API1("0x%x: DTA Enabled", eDtaMode);
+    appl_dta_mode_flag = 0x01;
+    nfa_dm_cb.eDtaMode = eDtaMode;
+}
+tNFA_MW_VERSION NFA_GetMwVersion ()
+{
+    tNFA_MW_VERSION mwVer;
+    mwVer.validation = ( NXP_EN_PN547C2 | (NXP_EN_PN65T << 1) | (NXP_EN_PN548C2 << 2) |
+                        (NXP_EN_PN66T << 3) | (NXP_EN_PN551 << 4) | (NXP_EN_PN67T << 5) |
+                        (NXP_EN_PN553 << 6) | (NXP_EN_PN80T << 7));
+    mwVer.android_version = NXP_ANDROID_VER;
+    NFA_TRACE_API1("0x%x:NFC MW Major Version:", NFC_NXP_MW_VERSION_MAJ);
+    NFA_TRACE_API1("0x%x:NFC MW Minor Version:", NFC_NXP_MW_VERSION_MIN);
+    mwVer.major_version = NFC_NXP_MW_VERSION_MAJ;
+    mwVer.minor_version = NFC_NXP_MW_VERSION_MIN;
+    NFA_TRACE_API2("mwVer:Major=0x%x,Minor=0x%x", mwVer.major_version,mwVer.minor_version);
+    return mwVer;
+}
+
+#if(NFC_NXP_STAT_DUAL_UICC_EXT_SWITCH == TRUE)
+/*******************************************************************************
+**
+** Function:        NFA_ResetNfcc
+**
+** Description:     Reset the NFCC
+**
+** Returns:         NFA_STATUS_OK if successfully initiated
+**                  NFA_STATUS_FAILED otherwise
+**
+*******************************************************************************/
+tNFA_STATUS NFA_ResetNfcc()
+{
+    tNFA_STATUS status = NFA_STATUS_FAILED;
+    status = nfc_ncif_reset_nfcc();
+    return status;
+}
+
+/*******************************************************************************
+**
+** Function:        NFA_EE_HCI_Control
+**
+** Description:     Enable/Disable EE&HCI subsystem based on mode flag.
+**                  Since NFCC reset being done, to receive Ntf corresponding to
+**                  UICC/ESE, EE and HCI Network has to be reset.
+**                  In MW corresponding context will be cleared and re-initialized
+**
+** Returns:         none:
+**
+*******************************************************************************/
+void NFA_EE_HCI_Control(BOOLEAN flagEnable)
+{
+    uint8_t id[2] = {NFA_ID_HCI, NFA_ID_EE};
+    uint8_t i = 0;
+    if(!flagEnable)
+    {
+        NFA_TRACE_DEBUG0 ("NFA_EE_HCI_Control (); Disable system");
+        nfa_sys_cb.graceful_disable = TRUE;
+        for(i=0; i<2; i++)
+        {
+            if (nfa_sys_cb.is_reg[id[i]])
+            {
+                if (nfa_sys_cb.reg[id[i]]->disable != NULL)
+                {
+                    (*nfa_sys_cb.reg[id[i]]->disable) ();
+                }
+                else
+                {
+                    nfa_sys_deregister (id[i]);;
+                }
+            }
+        }
+    }
+    else
+    {
+        nfa_ee_init();
+        nfa_hci_init();
+
+        NFA_TRACE_DEBUG0 ("NFA_EE_HCI_Control (); Enable system");
+        for(i=0; i<2; i++)
+        {
+            if (nfa_sys_cb.is_reg[id[i]])
+            {
+                if (nfa_sys_cb.reg[id[i]]->enable != NULL)
+                {
+                    (*nfa_sys_cb.reg[id[i]]->enable) ();
+                }
+                else
+                {
+                    nfa_sys_cback_notify_enable_complete (id[i]);
+                }
+            }
+        }
+
+    }
+}
+#endif
+#endif

@@ -375,6 +375,7 @@ CNfcConfig::~CNfcConfig()
 CNfcConfig& CNfcConfig::GetInstance()
 {
     static CNfcConfig theInstance;
+	ALOGD("=======%s====%s===%d=====%d===%d====", __FILE__, __func__,__LINE__, theInstance.size(), theInstance.mValidFile);
 
     if (theInstance.size() == 0 && theInstance.mValidFile)
     {

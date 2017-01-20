@@ -53,6 +53,25 @@ unsigned char InitializeGlobalAppLogLevel ()
     unsigned long num = 0;
     char valueStr [PROPERTY_VALUE_MAX] = {0};
 
+	property_get("persist.oem.nfc.debug", valueStr, "0");
+	if (strcmp(valueStr, "1") == 0) {
+		property_set("nfc.app_log_level", "5");
+		property_set("nfc.nxp_log_level_global", "3");
+		property_set("nfc.nxp_log_level_extns", "3");
+		property_set("nfc.nxp_log_level_hal", "3");
+		property_set("nfc.nxp_log_level_nci", "3");
+		property_set("nfc.nxp_log_level_dnld", "3");
+		property_set("nfc.nxp_log_level_tml", "3");
+	} else {
+		property_set("nfc.app_log_level", "1");
+		property_set("nfc.nxp_log_level_global", "1");
+		property_set("nfc.nxp_log_level_extns", "1");
+		property_set("nfc.nxp_log_level_hal", "1");
+		property_set("nfc.nxp_log_level_nci", "1");
+		property_set("nfc.nxp_log_level_dnld", "1");
+		property_set("nfc.nxp_log_level_tml", "1");
+	}
+
     num = 1;
     if (GetNumValue (NAME_APPL_TRACE_LEVEL, &num, sizeof(num)))
         appl_trace_level = (unsigned char) num;

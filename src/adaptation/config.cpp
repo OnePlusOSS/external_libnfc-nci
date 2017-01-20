@@ -15,19 +15,50 @@
  *  limitations under the License.
  *
  ******************************************************************************/
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2013-2014 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 #include "OverrideLog.h"
 #include "config.h"
 #include <stdio.h>
 #include <string>
 #include <vector>
 #include <list>
+#include <cutils/properties.h>
+#include <unistd.h>
 
+#undef LOG_TAG
 #define LOG_TAG "NfcAdaptation"
 
 const char transport_config_path[] = "/etc/";
 
+#if(NXP_EXTNS == TRUE)
+const char transit_config_path[] = "/data/nfc/";
+#endif
+
 #define config_name             "libnfc-brcm.conf"
+#define config_name_nohce       "libnfc-brcm_nohce.conf"
+#if(NXP_EXTNS == TRUE)
+#define extra_config_base       "libnfc-"
+#else
 #define extra_config_base       "libnfc-brcm-"
+#endif
 #define extra_config_ext        ".conf"
 #define     IsStringValue       0x80000000
 
@@ -53,12 +84,14 @@ class CNfcConfig : public vector<const CNfcParam*>
 public:
     virtual ~CNfcConfig();
     static CNfcConfig& GetInstance();
-    friend void readOptionalConfig(const char* optional);
-
+    friend void readOptionalConfigExt(const char* optional);
     bool    getValue(const char* name, char* pValue, size_t& len) const;
     bool    getValue(const char* name, unsigned long& rValue) const;
     bool    getValue(const char* name, unsigned short & rValue) const;
     const CNfcParam*    find(const char* p_name) const;
+#if(NXP_EXTNS == TRUE)
+    void    readNxpTransitConfig(const char* fileName) const;
+#endif
     void    clean();
 private:
     CNfcConfig();
@@ -66,6 +99,11 @@ private:
     void    moveFromList();
     void    moveToList();
     void    add(const CNfcParam* pParam);
+#if(NXP_EXTNS == TRUE)
+    void    dump();
+    bool    isAllowed(const char* name);
+    string  mCurrentFile;
+#endif
     list<const CNfcParam*> m_list;
     bool    mValidFile;
 
@@ -168,6 +206,9 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent)
     int     i = 0;
     int     base = 0;
     char    c = 0;
+#if(NXP_EXTNS == TRUE)
+    mCurrentFile = name;
+#endif
 
     state = BEGIN_LINE;
     /* open config file, read it into a buffer */
@@ -378,6 +419,31 @@ CNfcConfig::~CNfcConfig()
 {
 }
 
+string getnfchceconfig()
+{
+    char value[PROPERTY_VALUE_MAX] = {0, };
+    string strPath;
+
+    property_get("persist.oem.nfc.rf.card", value, "unknown");
+
+    if((! strcmp (value,"yangchengtong")) || (! strcmp (value,"lingnantong") ))
+    {
+       strPath=config_name_nohce;
+    }
+    else
+    {
+       strPath = config_name;
+    }
+    string judgestrPath;
+    judgestrPath="/etc/"+strPath;
+    if (access(judgestrPath.c_str(), F_OK) < 0)
+    {
+       ALOGE("%s  %s judgestrPath=%s not exist  use default  \n", __FILE__,__func__,judgestrPath.c_str() );
+       strPath = config_name;
+    }
+    return strPath ;
+}
+
 /*******************************************************************************
 **
 ** Function:    CNfcConfig::GetInstance()
@@ -395,8 +461,14 @@ CNfcConfig& CNfcConfig::GetInstance()
     {
         string strPath;
         strPath.assign(transport_config_path);
-        strPath += config_name;
+        // strPath += config_name;
+        strPath += getnfchceconfig();
         theInstance.readConfig(strPath.c_str(), true);
+#if(NXP_EXTNS == TRUE)
+        readOptionalConfigExt("nxp");
+        theInstance.readNxpTransitConfig("nxpTransit");
+#endif
+
     }
 
     return theInstance;
@@ -509,6 +581,27 @@ const CNfcParam* CNfcConfig::find(const char* p_name) const
     return NULL;
 }
 
+#if(NXP_EXTNS == TRUE)
+/*******************************************************************************
+**
+** Function:    CNfcConfig::readNxpTransitConfig()
+**
+** Description: read Config settings from transit conf file
+**
+** Returns:     none
+**
+*******************************************************************************/
+void CNfcConfig::readNxpTransitConfig(const char* fileName) const
+{
+    string strPath;
+    strPath.assign(transit_config_path);
+    strPath += extra_config_base;
+    strPath += fileName;
+    strPath += extra_config_ext;
+    CNfcConfig::GetInstance().readConfig(strPath.c_str(), false);
+}
+#endif
+
 /*******************************************************************************
 **
 ** Function:    CNfcConfig::clean()
@@ -544,15 +637,81 @@ void CNfcConfig::add(const CNfcParam* pParam)
         m_list.push_back(pParam);
         return;
     }
+#if(NXP_EXTNS == TRUE)
+    if((mCurrentFile.find("nxpTransit") != std::string::npos) && !isAllowed(pParam->c_str()))
+    {
+        ALOGD("%s Token restricted. Returning", __func__);
+        return;
+    }
+#endif
     for (list<const CNfcParam*>::iterator it = m_list.begin(), itEnd = m_list.end(); it != itEnd; ++it)
     {
         if (**it < pParam->c_str())
             continue;
+#if(NXP_EXTNS == TRUE)
+        /*If pParam->c_str() already exist in the list replace it*/
+        if (**it == pParam->c_str())
+            m_list.insert(m_list.erase(it), pParam);
+        else
+            m_list.insert(it, pParam);
+#else
         m_list.insert(it, pParam);
+#endif
         return;
     }
     m_list.push_back(pParam);
 }
+
+#if(NXP_EXTNS == TRUE)
+/*******************************************************************************
+**
+** Function:    CNfcConfig::dump()
+**
+** Description: prints all elements in the list
+**
+** Returns:     none
+**
+*******************************************************************************/
+void CNfcConfig::dump()
+{
+    ALOGD("%s Enter", __func__);
+
+    for (list<const CNfcParam*>::iterator it = m_list.begin(), itEnd = m_list.end(); it != itEnd; ++it)
+    {
+        if((*it)->str_len()>0)
+            ALOGD("%s %s \t= %s", __func__, (*it)->c_str(),(*it)->str_value());
+        else
+            ALOGD("%s %s \t= (0x%0lX)\n", __func__,(*it)->c_str(),(*it)->numValue());
+    }
+}
+
+/*******************************************************************************
+**
+** Function:    CNfcConfig::isAllowed()
+**
+** Description: checks if token update is allowed
+**
+** Returns:     true if allowed else false
+**
+*******************************************************************************/
+bool CNfcConfig::isAllowed(const char* name)
+{
+    string token(name);
+    bool stat = false;
+    if((token.find("P2P_LISTEN_TECH_MASK") != std::string::npos)        ||
+            (token.find("HOST_LISTEN_TECH_MASK") != std::string::npos)  ||
+            (token.find("UICC_LISTEN_TECH_MASK") != std::string::npos)  ||
+            (token.find("POLLING_TECH_MASK") != std::string::npos)      ||
+            (token.find("NXP_RF_CONF_BLK") != std::string::npos)        ||
+            (token.find("NXP_CN_TRANSIT_BLK_NUM_CHECK_ENABLE") != std::string::npos) ||
+            (token.find("NXP_FWD_FUNCTIONALITY_ENABLE") != std::string::npos))
+
+    {
+        stat = true;
+    }
+    return stat;
+}
+#endif
 
 /*******************************************************************************
 **
@@ -739,7 +898,7 @@ extern void resetConfig()
 ** Returns:     none
 **
 *******************************************************************************/
-void readOptionalConfig(const char* extra)
+void readOptionalConfigExt(const char* extra)
 {
     string strPath;
     strPath.assign(transport_config_path);
@@ -748,4 +907,3 @@ void readOptionalConfig(const char* extra)
     strPath += extra_config_ext;
     CNfcConfig::GetInstance().readConfig(strPath.c_str(), false);
 }
-

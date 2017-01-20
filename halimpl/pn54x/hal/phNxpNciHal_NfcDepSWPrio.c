@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 NXP Semiconductors
+ * Copyright (C) 2015 NXP Semiconductors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,6 +135,7 @@ static NFCSTATUS phNxpNciHal_stop_polling_loop()
     {
         NXPLOG_NCIHAL_E("phNxpNciHal_resume_polling_loop");
     }
+    pthread_attr_destroy(&attr);
     return status;
 }
 
@@ -161,6 +162,7 @@ static NFCSTATUS phNxpNciHal_resume_polling_loop()
     {
         NXPLOG_NCIHAL_E("phNxpNciHal_resume_polling_loop");
     }
+    pthread_attr_destroy(&attr);
     return status;
 }
 
@@ -187,6 +189,7 @@ NFCSTATUS phNxpNciHal_start_polling_loop()
     {
         NXPLOG_NCIHAL_E("phNxpNciHal_resume_polling_loop");
     }
+    pthread_attr_destroy(&attr);
     return status;
 }
 
@@ -557,6 +560,7 @@ void *tmp_thread(void *tmp)
     }
 
     NXPLOG_NCIHAL_E("tmp_thread: exit");
+    pthread_exit(NULL);
     return NULL;
 }
 /*******************************************************************************
@@ -584,7 +588,7 @@ NFCSTATUS phNxpNciHal_select_RF_Discovery(unsigned int RfID,unsigned int RfProto
     {
         NXPLOG_NCIHAL_E("phNxpNciHal_resume_polling_loop");
     }
-
+    pthread_attr_destroy(&attr);
     return status;
 }
 /*******************************************************************************

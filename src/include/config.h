@@ -15,6 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
@@ -39,8 +58,10 @@ int GetNumValue(const char* name, void* p_value, unsigned long len);
 #define NAME_SCREEN_OFF_POWER_STATE     "SCREEN_OFF_POWER_STATE"
 #define NAME_PREINIT_DSP_CFG            "PREINIT_DSP_CFG"
 #define NAME_DTA_START_CFG              "DTA_START_CFG"
+#if(NXP_EXTNS != TRUE)
 #define NAME_TRANSPORT_DRIVER           "TRANSPORT_DRIVER"
 #define NAME_POWER_CONTROL_DRIVER       "POWER_CONTROL_DRIVER"
+#endif
 #define NAME_PROTOCOL_TRACE_LEVEL       "PROTOCOL_TRACE_LEVEL"
 #define NAME_UART_PORT                  "UART_PORT"
 #define NAME_UART_BAUD                  "UART_BAUD"
@@ -64,7 +85,26 @@ int GetNumValue(const char* name, void* p_value, unsigned long len);
 #define NAME_NFA_DM_START_UP_VSC_CFG    "NFA_DM_START_UP_VSC_CFG"
 #define NAME_NFA_DTA_START_UP_VSC_CFG   "NFA_DTA_START_UP_VSC_CFG"
 #define NAME_UICC_LISTEN_TECH_MASK      "UICC_LISTEN_TECH_MASK"
+#define NAME_P2P_LISTEN_TECH_MASK       "P2P_LISTEN_TECH_MASK"
 #define NAME_UICC_LISTEN_TECH_EX_MASK   "UICC_LISTEN_TECH_EXCLUDE_MASK"
+#if (NXP_EXTNS == TRUE)
+#define NAME_APPL_DTA_MODE              "APPL_DTA_MODE"
+#define NAME_DEFAULT_AID_ROUTE          "DEFAULT_AID_ROUTE"
+#define NAME_DEFAULT_DESFIRE_ROUTE      "DEFAULT_DESFIRE_ROUTE"
+#define NAME_DEFAULT_MIFARE_CLT_ROUTE   "DEFAULT_MIFARE_CLT_ROUTE"
+#define NAME_DEFAULT_AID_PWR_STATE      "DEFAULT_AID_PWR_STATE"
+#define NAME_DEFAULT_DESFIRE_PWR_STATE  "DEFAULT_DESFIRE_PWR_STATE"
+#define NAME_DEFAULT_MIFARE_CLT_PWR_STATE  "DEFAULT_MIFARE_CLT_PWR_STATE"
+#define NAME_CHECK_DEFAULT_PROTO_SE_ID  "NXP_CHECK_DEFAULT_PROTO_SE_ID"
+#define NAME_NFA_DM_DISC_NTF_TIMEOUT    "NFA_DM_DISC_NTF_TIMEOUT"
+#define NAME_NXP_FWD_FUNCTIONALITY_ENABLE   "NXP_FWD_FUNCTIONALITY_ENABLE"
+#define NAME_HOST_LISTEN_TECH_MASK      "HOST_LISTEN_TECH_MASK"
+#define NAME_DEFAULT_FELICA_CLT_ROUTE    "DEFAULT_FELICA_CLT_ROUTE"
+#define NAME_DEFAULT_FELICA_CLT_PWR_STATE    "DEFAULT_FELICA_CLT_PWR_STATE"
+#endif
+#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#define NAME_DEFAULT_OFFHOST_ROUTE            "DEFAULT_OFFHOST_ROUTE"
+#endif
 #define NAME_SNOOZE_MODE_CFG            "SNOOZE_MODE_CFG"
 #define NAME_NFA_DM_DISC_DURATION_POLL  "NFA_DM_DISC_DURATION_POLL"
 #define NAME_SPD_DEBUG                  "SPD_DEBUG"
@@ -90,7 +130,17 @@ int GetNumValue(const char* name, void* p_value, unsigned long len);
 #define NAME_NCI_HAL_MODULE             "NCI_HAL_MODULE"
 #define NAME_NFA_POLL_BAIL_OUT_MODE     "NFA_POLL_BAIL_OUT_MODE"
 #define NAME_NFA_PROPRIETARY_CFG        "NFA_PROPRIETARY_CFG"
-
+#if(NXP_EXTNS == TRUE)
+#define NAME_NXP_NFCC_STANDBY_TIMEOUT   "NXP_NFCC_STANDBY_TIMEOUT"
+#define NAME_NXP_CP_TIMEOUT             "NXP_CP_TIMEOUT"
+#define NAME_NXP_CORE_SCRN_OFF_AUTONOMOUS_ENABLE   "NXP_CORE_SCRN_OFF_AUTONOMOUS_ENABLE"
+#define NAME_NXP_MIFARE_DESFIRE_DISABLE    "NXP_MIFARE_DESFIRE_DISABLE"
+#define NAME_NXP_ALLOW_WIRED_IN_MIFARE_DESFIRE_CLT    "NXP_ALLOW_WIRED_IN_MIFARE_DESFIRE_CLT"
+#if(NFC_NXP_STAT_DUAL_UICC_EXT_SWITCH == TRUE)
+#define NAME_NXP_DUAL_UICC_ENABLE       "NXP_DUAL_UICC_ENABLE"
+#endif
+#define NAME_NXP_NFCC_PASSIVE_LISTEN_TIMEOUT       "NXP_NFCC_PASSIVE_LISTEN_TIMEOUT"
+#endif
 #define                     LPTD_PARAM_LEN (40)
 
 // default configuration
@@ -106,7 +156,7 @@ struct tUART_CONFIG {
 
 extern struct tUART_CONFIG  uartConfig;
 #define MAX_CHIPID_LEN  (16)
-void    readOptionalConfig(const char* option);
+void    readOptionalConfigExt(const char* option);
 
 /* Snooze mode configuration structure */
 typedef struct

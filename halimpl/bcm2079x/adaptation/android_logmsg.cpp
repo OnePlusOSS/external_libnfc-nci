@@ -315,7 +315,7 @@ void LogMsg (UINT32 trace_set_mask, const char *fmt_str, ...)
     va_end (ap);
     if (trace_type == TRACE_TYPE_ERROR)
         android_log_type = ANDROID_LOG_ERROR;
-    __android_log_write (android_log_type, LOGMSG_TAG_NAME, buffer);
+    //__android_log_write (android_log_type, LOGMSG_TAG_NAME, buffer); //ruanbanmao modify
 }
 
 
