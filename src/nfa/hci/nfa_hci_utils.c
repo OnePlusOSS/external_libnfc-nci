@@ -15,7 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -320,7 +338,7 @@ tNFA_STATUS nfa_hciu_send_msg (UINT8 pipe_id, UINT8 type, UINT8 instruction, UIN
     BOOLEAN          first_pkt = TRUE;
     UINT16          data_len;
     tNFA_STATUS     status = NFA_STATUS_OK;
-    UINT16          max_seg_hcp_pkt_size = nfa_hci_cb.buff_size - NCI_DATA_HDR_SIZE;
+    UINT16          max_seg_hcp_pkt_size = nfa_hci_cb.buff_size;
 
 #if (BT_TRACE_VERBOSE == TRUE)
     char    buff[100];
@@ -367,7 +385,7 @@ tNFA_STATUS nfa_hciu_send_msg (UINT8 pipe_id, UINT8 type, UINT8 instruction, UIN
                 p_buf->len++;
             }
 
-            if (data_len != 0)
+            if ((data_len != 0)&&(p_msg != NULL))
             {
                 memcpy (p_data, p_msg, data_len);
 
@@ -401,7 +419,6 @@ tNFA_STATUS nfa_hciu_send_msg (UINT8 pipe_id, UINT8 type, UINT8 instruction, UIN
 
         if (nfa_hci_cb.hci_state == NFA_HCI_STATE_IDLE)
             nfa_hci_cb.hci_state = NFA_HCI_STATE_WAIT_RSP;
-
         nfa_sys_start_timer (&nfa_hci_cb.timer, NFA_HCI_RSP_TIMEOUT_EVT, p_nfa_hci_cfg->hcp_response_timeout);
     }
 
@@ -1299,12 +1316,12 @@ char *nfa_hciu_get_event_name (UINT16 event)
     case NFA_HCI_RSP_NV_WRITE_EVT:            return ("NV_WRITE_EVT");
     case NFA_HCI_RSP_TIMEOUT_EVT:             return ("RESPONSE_TIMEOUT_EVT");
     case NFA_HCI_CHECK_QUEUE_EVT:             return ("CHECK_QUEUE");
-
+    case NFA_HCI_API_SEND_ADMIN_EVT:          return ("API_SEND_ADMIN_COMMAND_EVT");
+    case NFA_HCI_API_CONFIGURE_EVT:           return ("API_SEND_CONFIGURE_EVT");
     default:
         return ("UNKNOWN");
     }
 }
-
 /*******************************************************************************
 **
 ** Function         nfa_hciu_get_state_name
@@ -1327,6 +1344,7 @@ char *nfa_hciu_get_state_name (UINT8 state)
     case NFA_HCI_STATE_APP_DEREGISTER:       return ("APP_DEREGISTER");
     case NFA_HCI_STATE_RESTORE:              return ("RESTORE");
     case NFA_HCI_STATE_RESTORE_NETWK_ENABLE: return ("WAIT_NETWK_ENABLE_AFTER_RESTORE");
+    case NFA_HCI_STATE_NFCEE_ENABLE:         return ("WAIT_NFCEE_ENABLE");
 
     default:
         return ("UNKNOWN");
@@ -1407,6 +1425,10 @@ char *nfa_hciu_evt_2_str (UINT8 pipe_id, UINT8 evt)
         return ("EVT_POST_DATA");
     case NFA_HCI_EVT_HOT_PLUG:
         return ("EVT_HOT_PLUG");
+#if (NXP_EXTNS == TRUE)
+    case NFA_HCI_ABORT:
+        return ("EVT_ABORT");
+#endif
     default:
         return ("UNKNOWN");
     }
@@ -1418,6 +1440,7 @@ static void handle_debug_loopback (BT_HDR *p_buf, UINT8 pipe, UINT8 type, UINT8 
 {
     UINT8 *p = (UINT8 *) (p_buf + 1) + p_buf->offset;
     static UINT8  next_pipe = 0x10;
+    (void)pipe;
 
     if (type == NFA_HCI_COMMAND_TYPE)
     {
@@ -1454,4 +1477,3 @@ static void handle_debug_loopback (BT_HDR *p_buf, UINT8 pipe, UINT8 type, UINT8 
     p_buf->event = NFA_HCI_CHECK_QUEUE_EVT;
     nfa_sys_sendmsg (p_buf);
 }
-

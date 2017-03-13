@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2014 NXP Semiconductors
+ * Copyright (C) 2015 NXP Semiconductors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@
 #define PHDNLDNFC_USERDATA_EEPROM_LEN     (0x0DC0U)    /* 16 bits length of user data area */
 #else
 
-#if(NFC_NXP_CHIP_TYPE == PN548C2)
+#if((NFC_NXP_CHIP_TYPE == PN548C2))
 /* EEPROM offset and length value for PN548AD */
 #define PHDNLDNFC_USERDATA_EEPROM_OFFSET  (0x02BCU)    /* 16 bits offset indicating user data area start location */
 #define PHDNLDNFC_USERDATA_EEPROM_LEN     (0x0C00U)    /* 16 bits length of user data area */
@@ -667,6 +667,11 @@ static NFCSTATUS phDnldNfc_BuildFramePkt(pphDnldNfc_DlContext_t pDlContext)
         {
             wFrameLen = 0;
             wFrameLen  = (pDlContext->tCmdRspFrameInfo.dwSendlength);
+            if(wFrameLen > PHDNLDNFC_CMDRESP_MAX_BUFF_SIZE)
+            {
+                 NXPLOG_FWDNLD_D("wFrameLen exceeds the limit");
+                 return NFCSTATUS_FAILED;
+            }
 
             if(phDnldNfc_FTRaw != (pDlContext->FrameInp.Type))
             {
@@ -704,9 +709,9 @@ static NFCSTATUS phDnldNfc_BuildFramePkt(pphDnldNfc_DlContext_t pDlContext)
                         wFrameLen += PHDNLDNFC_FRAME_HDR_LEN;
                     }
                 }
-                if (wFrameLen > PHDNLDNFC_CMDRESP_MAX_BUFF_SIZE)
+                if(wFrameLen > PHDNLDNFC_CMDRESP_MAX_BUFF_SIZE)
                 {
-                    NXPLOG_FWDNLD_D ("wFrameLen exceeds the limit");
+                    NXPLOG_FWDNLD_D("wFrameLen exceeds the limit");
                     return NFCSTATUS_FAILED;
                 }
                 /* calculate CRC16 */

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 NXP Semiconductors
+ * Copyright (C) 2015 NXP Semiconductors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #define HAL_WRITE_RSP_TIMEOUT   (2000)   /* Timeout value to wait for response from PN54X */
 #define HAL_WRITE_MAX_RETRY     (10)
+#define CORE_INIT_NCI2_0  FALSE
 
 /******************* Structures and definitions *******************************/
 
@@ -81,13 +82,13 @@ NFCSTATUS phNxpNciHal_getPrbsCmd (uint8_t tech, uint8_t bitrate, uint8_t *prbs_c
 static nci_test_data_t swp2_test_data[] = {
     {
         {
-            0x04, {0x20, 0x00, 0x01, 0x00} /* cmd */
+            0x04, {0x20,0x00,0x01,0x00} /* cmd */
         },
         {
 #if(NFC_NXP_CHIP_TYPE != PN547C2)
-            0x06, {0x40, 0x00, 0x03, 0x00, 0x11, 0x00} /* exp_rsp */
+            0x06, {0x40,0x00,0x03,0x00,0x11,0x00} /* exp_rsp */
 #else
-            0x06, {0x40, 0x00, 0x03, 0x00, 0x10, 0x00} /* exp_rsp */
+            0x06, {0x40,0x00,0x03,0x00,0x10,0x00} /* exp_rsp */
 #endif
         },
         {
@@ -98,14 +99,16 @@ static nci_test_data_t swp2_test_data[] = {
     },
     {
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE != PN547C2) && (CORE_INIT_NCI2_0))
             0x05, {0x20,0x01,0x02,0x00,0x00} /* cmd */
 #else
             0x03, {0x20,0x01,0x00}
 #endif
         },
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE==PN551)||(NFC_NXP_CHIP_TYPE==PN553))
+            0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
+#elif(NFC_NXP_CHIP_TYPE == PN548C2)
             0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
 #else
             0x4, {0x40,0x01,0x17,0x00 }
@@ -151,13 +154,13 @@ static nci_test_data_t swp1_test_data[] = {
 
     {
         {
-            0x04, {0x20, 0x00, 0x01, 0x00} /* cmd */
+            0x04, {0x20,0x00,0x01,0x00} /* cmd */
         },
         {
 #if(NFC_NXP_CHIP_TYPE != PN547C2)
-            0x06, {0x40, 0x00, 0x03, 0x00, 0x11, 0x00} /* exp_rsp */
+            0x06, {0x40,0x00,0x03,0x00,0x11,0x00} /* exp_rsp */
 #else
-            0x06, {0x40, 0x00, 0x03, 0x00, 0x10, 0x00} /* exp_rsp */
+            0x06, {0x40,0x00,0x03,0x00,0x10,0x00} /* exp_rsp */
 #endif
         },
         {
@@ -168,14 +171,16 @@ static nci_test_data_t swp1_test_data[] = {
     },
     {
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE != PN547C2) && (CORE_INIT_NCI2_0))
             0x05, {0x20,0x01,0x02,0x00,0x00} /* cmd */
 #else
             0x03, {0x20,0x01,0x00}
 #endif
         },
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE==PN551)||(NFC_NXP_CHIP_TYPE==PN553))
+            0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
+#elif(NFC_NXP_CHIP_TYPE == PN548C2)
             0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
 #else
             0x4, {0x40,0x01,0x17,0x00 }
@@ -236,14 +241,16 @@ static nci_test_data_t prbs_test_data[] = {
     },
     {
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE != PN547C2) && (CORE_INIT_NCI2_0))
             0x05, {0x20,0x01,0x02,0x00,0x00} /* cmd */
 #else
             0x03, {0x20,0x01,0x00} /* cmd */
 #endif
         },
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE==PN551)||(NFC_NXP_CHIP_TYPE==PN553))
+            0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
+#elif(NFC_NXP_CHIP_TYPE == PN548C2)
             0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
 #else
             0x4, {0x40,0x01,0x17,0x00 } /* exp_rsp */
@@ -293,14 +300,16 @@ static nci_test_data_t rf_field_on_test_data[] = {
     },
     {
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE != PN547C2) && (CORE_INIT_NCI2_0))
             0x05, {0x20,0x01,0x02,0x00,0x00} /* cmd */
 #else
             0x03, {0x20,0x01,0x00} /* cmd */
 #endif
         },
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE==PN551)||(NFC_NXP_CHIP_TYPE==PN553))
+            0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
+#elif(NFC_NXP_CHIP_TYPE == PN548C2)
             0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
 #else
             0x4, {0x40,0x01,0x17,0x00 } /* exp_rsp */
@@ -394,14 +403,16 @@ static nci_test_data_t rf_field_off_test_data[] = {
     },
     {
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE != PN547C2) && (CORE_INIT_NCI2_0))
             0x05, {0x20,0x01,0x02,0x00,0x00} /* cmd */
 #else
             0x03, {0x20,0x01,0x00} /* cmd */
 #endif
         },
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE==PN551)||(NFC_NXP_CHIP_TYPE==PN553))
+            0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
+#elif(NFC_NXP_CHIP_TYPE == PN548C2)
             0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
 #else
             0x4, {0x40,0x01,0x17,0x00 } /* exp_rsp */
@@ -479,13 +490,13 @@ static nci_test_data_t rf_field_off_test_data[] = {
 static nci_test_data_t download_pin_test_data1[] = {
     {
         {
-            0x04, {0x20, 0x00, 0x01, 0x00} /* cmd */
+            0x04, {0x20,0x00,0x01,0x00} /* cmd */
         },
         {
 #if(NFC_NXP_CHIP_TYPE != PN547C2)
-            0x06, {0x40, 0x00, 0x03, 0x00, 0x11, 0x00} /* exp_rsp */
+            0x06, {0x40,0x00,0x03,0x00,0x11,0x00} /* exp_rsp */
 #else
-            0x06, {0x40, 0x00, 0x03, 0x00, 0x10, 0x00} /* exp_rsp */
+            0x06, {0x40,0x00,0x03,0x00,0x10,0x00} /* exp_rsp */
 #endif
         },
         {
@@ -533,14 +544,16 @@ static nci_test_data_t antenna_self_test_data[] = {
     },
     {
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE != PN547C2) && (CORE_INIT_NCI2_0))
             0x05, {0x20,0x01,0x02,0x00,0x00} /* cmd */
 #else
             0x03, {0x20,0x01,0x00} /* cmd */
 #endif
         },
         {
-#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#if((NFC_NXP_CHIP_TYPE==PN551)||(NFC_NXP_CHIP_TYPE==PN553))
+            0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
+#elif(NFC_NXP_CHIP_TYPE == PN548C2)
             0x4, {0x40,0x01,0x19,0x00 } /* exp_rsp */
 #else
             0x4, {0x40,0x01,0x17,0x00 } /* exp_rsp */
@@ -1070,42 +1083,45 @@ static void hal_read_cb(void *pContext, phTmlNfc_TransactInfo_t *pInfo)
             NXPLOG_NCIHAL_E("Response timer stop ERROR!!!");
             p_cb_data->status  = NFCSTATUS_FAILED;
         }
-        if (pInfo == NULL)
+        if(pInfo == NULL)
         {
-            NXPLOG_NCIHAL_E ("Empty TransactInfo");
+            NXPLOG_NCIHAL_E("Empty TransactInfo");
             p_cb_data->status  = NFCSTATUS_FAILED;
         }
         else
         {
             if (pInfo->wStatus == NFCSTATUS_SUCCESS)
             {
-                NXPLOG_NCIHAL_D ("hal_read_cb successful status = 0x%x", pInfo->wStatus);
+                NXPLOG_NCIHAL_D("hal_read_cb successful status = 0x%x", pInfo->wStatus);
                 p_cb_data->status = NFCSTATUS_SUCCESS;
             }
             else
             {
-                NXPLOG_NCIHAL_E ("hal_read_cb error status = 0x%x", pInfo->wStatus);
+                NXPLOG_NCIHAL_E("hal_read_cb error status = 0x%x", pInfo->wStatus);
                 p_cb_data->status = NFCSTATUS_FAILED;
             }
 
+
             p_cb_data->status = pInfo->wStatus;
+
             nci_test_data_t *test_data = (nci_test_data_t*) p_cb_data->pContext;
 
-            if (test_data->exp_rsp.len == 0)
+            if(test_data->exp_rsp.len == 0)
             {
                 /* Compare the actual notification with expected notification.*/
-                if(test_data->ntf_validator (&(test_data->exp_ntf), pInfo) == 1 )
+                if( test_data->ntf_validator(&(test_data->exp_ntf),pInfo) == 1 )
                 {
                     p_cb_data->status = NFCSTATUS_SUCCESS;
                 }
                 else
                 {
                     p_cb_data->status = NFCSTATUS_FAILED;
+
                 }
             }
 
             /* Compare the actual response with expected response.*/
-            else if (test_data->rsp_validator (&(test_data->exp_rsp), pInfo) == 1)
+            else if( test_data->rsp_validator(&(test_data->exp_rsp),pInfo) == 1)
             {
                 p_cb_data->status = NFCSTATUS_SUCCESS;
             }
@@ -1113,12 +1129,11 @@ static void hal_read_cb(void *pContext, phTmlNfc_TransactInfo_t *pInfo)
             {
                 p_cb_data->status = NFCSTATUS_FAILED;
             }
-
             test_data->exp_rsp.len = 0;
         }
     }
 
-    SEM_POST (p_cb_data);
+    SEM_POST(p_cb_data);
 
     return;
 }
@@ -1173,6 +1188,7 @@ static void *phNxpNciHal_test_rx_thread(void *arg)
 
     NXPLOG_NCIHAL_D("Self test thread stopped");
 
+    pthread_exit(NULL);
     return NULL;
 }
 
@@ -1391,8 +1407,8 @@ NFCSTATUS phNxpNciHal_TestMode_open (void)
 
     phOsalNfc_Config_t tOsalConfig;
     phTmlNfc_Config_t tTmlConfig;
-    char *nfc_dev_node = NULL;
-    const uint16_t max_len = 260;
+    uint8_t *nfc_dev_node = NULL;
+    const uint16_t max_len = 260; /* device node name is max of 255 bytes + 5 bytes (/dev/) */
     NFCSTATUS status = NFCSTATUS_SUCCESS;
     uint16_t read_len = 255;
     int8_t ret_val = 0x00;
@@ -1411,16 +1427,16 @@ NFCSTATUS phNxpNciHal_TestMode_open (void)
     memset(&tTmlConfig, 0x00, sizeof(tTmlConfig));
 
     /* Read the nfc device node name */
-    nfc_dev_node = (char*) malloc (max_len * sizeof (char*));
-    if (nfc_dev_node == NULL)
+    nfc_dev_node = (uint8_t*) malloc(max_len*sizeof(uint8_t));
+    if(nfc_dev_node == NULL)
     {
-        NXPLOG_NCIHAL_E ("malloc of nfc_dev_node failed ");
+        NXPLOG_NCIHAL_E("malloc of nfc_dev_node failed ");
         goto clean_and_return;
     }
-    else if (!GetNxpStrValue (NAME_NXP_NFC_DEV_NODE, nfc_dev_node, sizeof (nfc_dev_node)))
+    else if (!GetNxpStrValue (NAME_NXP_NFC_DEV_NODE, (char*)nfc_dev_node, sizeof (nfc_dev_node)))
     {
-        NXPLOG_NCIHAL_E ("Invalid nfc device node name keeping the default device node /dev/pn544");
-        strcpy (nfc_dev_node, "/dev/pn544");
+        NXPLOG_NCIHAL_E("Invalid nfc device node name keeping the default device node /dev/pn54x");
+        strcpy ((char *)nfc_dev_node, "/dev/pn54x");
     }
 
     gDrvCfg.nClientId = phDal4Nfc_msgget(0, 0600);
@@ -1440,19 +1456,19 @@ NFCSTATUS phNxpNciHal_TestMode_open (void)
     }
     else
     {
-        if (nfc_dev_node != NULL)
+        if(nfc_dev_node != NULL)
         {
-            free (nfc_dev_node);
+            free(nfc_dev_node);
             nfc_dev_node = NULL;
         }
     }
 
     pthread_attr_t attr;
-    pthread_attr_init (&attr);
-    pthread_attr_setdetachstate (&attr, PTHREAD_CREATE_DETACHED);
-    ret_val = pthread_create (&test_rx_thread, &attr,
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    ret_val = pthread_create(&test_rx_thread, &attr,
             phNxpNciHal_test_rx_thread, NULL);
-    pthread_attr_destroy (&attr);
+    pthread_attr_destroy(&attr);
     if (ret_val != 0)
     {
         NXPLOG_NCIHAL_E("pthread_create failed");
@@ -1475,13 +1491,13 @@ NFCSTATUS phNxpNciHal_TestMode_open (void)
     return NFCSTATUS_SUCCESS;
 
 clean_and_return:
-    CONCURRENCY_UNLOCK ();
-    if (nfc_dev_node != NULL)
+    CONCURRENCY_UNLOCK();
+    if(nfc_dev_node != NULL)
     {
-        free (nfc_dev_node);
+        free(nfc_dev_node);
         nfc_dev_node = NULL;
     }
-    phNxpNciHal_cleanup_monitor ();
+    phNxpNciHal_cleanup_monitor();
     return NFCSTATUS_FAILED;
 }
 

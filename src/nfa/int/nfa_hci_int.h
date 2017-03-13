@@ -15,7 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -28,7 +46,9 @@
 #include "nfa_hci_api.h"
 
 extern BOOLEAN HCI_LOOPBACK_DEBUG;
-
+#if((NXP_EXTNS == TRUE) && (NXP_NFCC_MW_RCVRY_BLK_FW_DNLD == TRUE))
+BOOLEAN MW_RCVRY_FW_DNLD_ALLOWED;
+#endif
 /*****************************************************************************
 **  Constants and data types
 *****************************************************************************/
@@ -39,6 +59,13 @@ extern BOOLEAN HCI_LOOPBACK_DEBUG;
 
 #define NFA_HCI_SESSION_ID_LEN          8           /* HCI Session ID length */
 #define NFA_MAX_PIPES_IN_GENERIC_GATE   0x0F        /* Maximum pipes that can be created on a generic pipe  */
+
+#if (NXP_EXTNS == TRUE)
+#define NFA_HCI_HOST_TYPE_LEN          2           /* HCI Host Type length */
+#define NFA_HCI_CONTROLLER_VERSION_9   9           /* HCI controller ETSI Version 9 */
+#define NFA_HCI_CONTROLLER_VERSION_12  12          /* HCI controller ETSI Version 12 */
+#endif
+
 
 #define NFA_HCI_VERSION_SW              0x090000    /* HCI SW Version number                       */
 #define NFA_HCI_VERSION_HW              0x000000    /* HCI HW Version number                       */
@@ -56,6 +83,15 @@ extern BOOLEAN HCI_LOOPBACK_DEBUG;
 #define NFA_HCI_STATE_APP_DEREGISTER        0x06     /* Removing all pipes and gates prior to deregistering the app */
 #define NFA_HCI_STATE_RESTORE               0x07     /* HCI restore */
 #define NFA_HCI_STATE_RESTORE_NETWK_ENABLE  0x08     /* HCI is waiting for initialization of other host in the network after restore */
+#if(NXP_EXTNS == TRUE)
+#define NFA_HCI_STATE_NFCEE_ENABLE          0x09     /* HCI is waiting for NFCEE initialization */
+#endif
+
+#if(NXP_EXTNS == TRUE)
+#define NFA_HCI_MAX_RSP_WAIT_TIME           0x0C
+#define NFA_HCI_CHAIN_PKT_RSP_TIMEOUT       30000    /* After the reception of WTX, maximum response timeout value is 30 sec */
+#define NFA_HCI_WTX_RESP_TIMEOUT            3000     /* Wait time to give response timeout to application if WTX not received*/
+#endif
 
 typedef UINT8 tNFA_HCI_STATE;
 
@@ -88,6 +124,10 @@ enum
     NFA_HCI_API_ADD_STATIC_PIPE_EVT,                              /* Add a static pipe */
     NFA_HCI_API_SEND_CMD_EVT,                                     /* Send command via pipe */
     NFA_HCI_API_SEND_RSP_EVT,                                     /* Application Response to a command */
+#if(NXP_EXTNS == TRUE)
+    NFA_HCI_API_CONFIGURE_EVT,                                    /* Configure NFCEE as per ETSI 12 standards */
+    NFA_HCI_API_SEND_ADMIN_EVT,                                   /* Send a Command on Admin Pipe */
+#endif
     NFA_HCI_API_SEND_EVENT_EVT,                                   /* Send event via pipe */
 
     NFA_HCI_RSP_NV_READ_EVT,                                      /* Non volatile read complete event */
@@ -235,8 +275,27 @@ typedef struct
     UINT8               *p_evt_buf;
     UINT16              rsp_len;
     UINT8               *p_rsp_buf;
+#if(NXP_EXTNS == TRUE)
+    UINT32              rsp_timeout;
+#else
     UINT16              rsp_timeout;
+#endif
 } tNFA_HCI_API_SEND_EVENT_EVT;
+/* data type for tNFA_HCI_API_SEND_ADMIN_EVT */
+#if(NXP_EXTNS == TRUE)
+typedef struct
+{
+    BT_HDR              hdr;
+    tNFA_HANDLE         hci_handle;
+} tNFA_HCI_API_SEND_ADMIN_EVT;
+
+/* data type for tNFA_HCI_API_CONFIGURE_EVT */
+typedef struct
+{
+    BT_HDR              hdr;
+    UINT8               hostId;
+} tNFA_HCI_API_CONFIGURE_EVT;
+#endif
 
 /* data type for NFA_HCI_API_SEND_CMD_EVT */
 typedef struct
@@ -309,6 +368,10 @@ typedef union
     /* Internal events */
     tNFA_HCI_RSP_NV_READ_EVT            nv_read;                        /* Read Non volatile data */
     tNFA_HCI_RSP_NV_WRITE_EVT           nv_write;                       /* Write Non volatile data */
+#if (NXP_EXTNS == TRUE)
+    tNFA_HCI_API_SEND_ADMIN_EVT         send_admin_cmd;                 /* Send a command  on a Admin pipe to a host */
+    tNFA_HCI_API_CONFIGURE_EVT          config_info;                    /* Configuration of NFCEE for ETSI12 */
+#endif
 } tNFA_HCI_EVENT_DATA;
 
 /*****************************************************************************
@@ -361,8 +424,15 @@ typedef struct
 /* Internal flags */
 #define NFA_HCI_FL_DISABLING        0x01                /* sub system is being disabled */
 #define NFA_HCI_FL_NV_CHANGED       0x02                /* NV Ram changed */
+#if (NXP_EXTNS == TRUE)
+#define NFA_HCI_FL_CONN_PIPE 0x01
+#define NFA_HCI_FL_APDU_PIPE 0x02
+#define NFA_HCI_FL_OTHER_PIPE 0x04
 
-
+#define NFA_HCI_CONN_ESE_PIPE 0x16
+#define NFA_HCI_CONN_UICC_PIPE 0x0A
+#define NFA_HCI_APDU_PIPE 0x19
+#endif
 /* NFA HCI control block */
 typedef struct
 {
@@ -396,6 +466,22 @@ typedef struct
     UINT16                          max_msg_len;                        /* Maximum reassembled message size */
     UINT8                           msg_data[NFA_MAX_HCI_EVENT_LEN];    /* For segmentation - the combined message data */
     UINT8                           *p_msg_data;                        /* For segmentation - reassembled message */
+#if (NXP_EXTNS == TRUE)
+    UINT8                           assembling_flags;                   /* the flags to keep track of assembling status*/
+    UINT8                           assembly_failed_flags;              /* the flags to keep track of failed assembly*/
+    UINT8                           *p_evt_data;                        /* For segmentation - reassembled event data */
+    UINT16                          evt_len;                            /* For segmentation - length of the combined event data */
+    UINT16                          max_evt_len;                        /* Maximum reassembled message size */
+    UINT8                           evt_data[NFA_MAX_HCI_EVENT_LEN];    /* For segmentation - the combined event data */
+    UINT8                           type_evt;                               /* Instruction type of incoming message */
+    UINT8                           inst_evt;                               /* Instruction of incoming message */
+    UINT8                           type_msg;                               /* Instruction type of incoming message */
+    UINT8                           inst_msg;                               /* Instruction of incoming message */
+    UINT8                           host_count;                             /* no of Hosts ETSI 12 compliant */
+    UINT8                           host_id[NFA_HCI_MAX_NO_HOST_ETSI12];    /* Host id ETSI 12 compliant */
+    UINT8                           host_controller_version;                 /* no of host controller version */
+    UINT8                           current_nfcee;                      /* current Nfcee under execution  */
+#endif
     UINT8                           type;                               /* Instruction type of incoming message */
     UINT8                           inst;                               /* Instruction of incoming message */
 
@@ -445,6 +531,10 @@ extern void nfa_hci_dh_startup_complete (void);
 extern void nfa_hci_startup_complete (tNFA_STATUS status);
 extern void nfa_hci_startup (void);
 extern void nfa_hci_restore_default_config (UINT8 *p_session_id);
+#if (NXP_EXTNS == TRUE)
+extern void nfa_hci_release_transcieve();
+extern void nfa_hci_network_enable();
+#endif
 
 /* Action functions in nfa_hci_act.c
 */

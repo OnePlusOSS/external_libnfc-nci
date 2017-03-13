@@ -390,7 +390,7 @@ void ce_t3t_handle_update_cmd (tCE_CB *p_ce_cb, BT_HDR *p_cmd_msg)
         update_info.p_data = p_cb->ndef_info.p_scratch_buf;
         update_info.length = p_cb->ndef_info.scratch_ln;
         p_cb->state = CE_T3T_STATE_IDLE;
-        p_ce_cb->p_cback (CE_T3T_NDEF_UPDATE_CPLT_EVT, (tCE_DATA *) &update_info);
+        p_ce_cb->p_cback (CE_T3T_NDEF_UPDATE_CPLT_EVT, (void *) &update_info);
     }
 
     GKI_freebuf (p_cmd_msg);
@@ -690,6 +690,7 @@ void ce_t3t_data_cback (UINT8 conn_id, tNFC_DATA_CEVT *p_data)
 #if (BT_TRACE_PROTOCOL == TRUE)
     DispT3TagMessage (p_msg, TRUE);
 #endif
+    (void)conn_id;
 
     /* If activate system code is not NDEF, or if no local NDEF contents was set, then pass data up to the app */
     if ((p_cb->system_code != T3T_SYSTEM_CODE_NDEF) || (!p_cb->ndef_info.initialized))

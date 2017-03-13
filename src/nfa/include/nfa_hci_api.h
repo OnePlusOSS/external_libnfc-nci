@@ -15,7 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -39,16 +57,16 @@
 #define NFA_HCI_DEBUG_DISABLE_LOOPBACK          102
 
 /* NFA HCI callback events */
-#define NFA_HCI_REGISTER_EVT	                0x00    /* Application registered                       */
+#define NFA_HCI_REGISTER_EVT                    0x00    /* Application registered                       */
 #define NFA_HCI_DEREGISTER_EVT                  0x01    /* Application deregistered                     */
 #define NFA_HCI_GET_GATE_PIPE_LIST_EVT          0x02    /* Retrieved gates,pipes assoc. to application  */
-#define NFA_HCI_ALLOCATE_GATE_EVT	            0x03    /* A generic gate allocated to the application  */
-#define NFA_HCI_DEALLOCATE_GATE_EVT	            0x04    /* A generic gate is released                   */
-#define NFA_HCI_CREATE_PIPE_EVT         	    0x05    /* Pipe is created                              */
-#define NFA_HCI_OPEN_PIPE_EVT         	        0x06    /* Pipe is opened / could not open              */
-#define NFA_HCI_CLOSE_PIPE_EVT         	        0x07    /* Pipe is closed / could not close             */
-#define NFA_HCI_DELETE_PIPE_EVT         	    0x08    /* Pipe is deleted                              */
-#define NFA_HCI_HOST_LIST_EVT       	        0x09    /* Received list of Host from Host controller   */
+#define NFA_HCI_ALLOCATE_GATE_EVT               0x03    /* A generic gate allocated to the application  */
+#define NFA_HCI_DEALLOCATE_GATE_EVT             0x04    /* A generic gate is released                   */
+#define NFA_HCI_CREATE_PIPE_EVT                 0x05    /* Pipe is created                              */
+#define NFA_HCI_OPEN_PIPE_EVT                   0x06    /* Pipe is opened / could not open              */
+#define NFA_HCI_CLOSE_PIPE_EVT                  0x07    /* Pipe is closed / could not close             */
+#define NFA_HCI_DELETE_PIPE_EVT                 0x08    /* Pipe is deleted                              */
+#define NFA_HCI_HOST_LIST_EVT                   0x09    /* Received list of Host from Host controller   */
 #define NFA_HCI_INIT_EVT                        0x0A    /* HCI subsytem initialized                     */
 #define NFA_HCI_EXIT_EVT                        0x0B    /* HCI subsytem exited                          */
 #define NFA_HCI_RSP_RCVD_EVT                    0x0C    /* Response recvd to cmd sent on app owned pipe */
@@ -62,13 +80,24 @@
 #define NFA_HCI_GET_REG_RSP_EVT                 0x14    /* Received response to read registry command   */
 #define NFA_HCI_SET_REG_RSP_EVT                 0x15    /* Received response to write registry command  */
 #define NFA_HCI_ADD_STATIC_PIPE_EVT             0x16    /* A static pipe is added                       */
-
+#if (NXP_EXTNS == TRUE)
+#define NFA_HCI_RSP_SENT_ADMIN_EVT              0x17    /* Response recvd to cmd on Admin pipe          */
+#define NFA_HCI_CONFIG_DONE_EVT                 0x18    /* Configure NFCEE                              */
+#endif
 typedef UINT8 tNFA_HCI_EVT;
 
 #define NFA_MAX_HCI_APP_NAME_LEN                0x10    /* Max application name length */
 #define NFA_MAX_HCI_CMD_LEN                     255     /* Max HCI command length */
 #define NFA_MAX_HCI_RSP_LEN                     255     /* Max HCI event length */
+#if (NXP_EXTNS == TRUE)
+/*
+ * increased the the buffer size, since as per HCI specification connectivity event may
+ * take up 271 bytes. (MAX AID length:16, MAX PARAMETERS length:255)
+ * */
+#define NFA_MAX_HCI_EVENT_LEN                   300     /* Max HCI event length */
+#else
 #define NFA_MAX_HCI_EVENT_LEN                   260     /* Max HCI event length */
+#endif
 #define NFA_MAX_HCI_DATA_LEN                    260     /* Max HCI data length */
 
 /* NFA HCI PIPE states */
@@ -241,8 +270,20 @@ typedef struct
     UINT8               data_len;                       /* length of the registry parameter */
     UINT8               reg_data[NFA_MAX_HCI_DATA_LEN]; /* Registry parameter */
 } tNFA_HCI_REGISTRY;
-
-
+#if (NXP_EXTNS == TRUE)
+/* Data for tNFA_HCI_ADMIN_RSP_RCVD */
+typedef struct
+{
+    tNFA_STATUS     status;                             /* Status of command on Admin pipe */
+    UINT8 NoHostsPresent;                               /* No of Hosts compliant to ETSI 12 */
+    UINT8 HostIds[5];                                   /* Host Ids compliant to ETSI 12 */
+} tNFA_HCI_ADMIN_RSP_RCVD;
+/* Data for tNFA_HCI_CONFIG_RSP_RCVD */
+typedef struct
+{
+    tNFA_STATUS     status;                             /* Status for ETSI12 config for NFCEE*/
+} tNFA_HCI_CONFIG_RSP_RCVD;
+#endif
 /* Union of all hci callback structures */
 typedef union
 {
@@ -267,7 +308,19 @@ typedef union
     tNFA_HCI_INIT                   hci_init;       /* NFA_HCI_INIT_EVT               */
     tNFA_HCI_EXIT                   hci_exit;       /* NFA_HCI_EXIT_EVT               */
     tNFA_HCI_ADD_STATIC_PIPE_EVT    pipe_added;     /* NFA_HCI_ADD_STATIC_PIPE_EVT    */
+#if(NXP_EXTNS == TRUE)
+    tNFA_HCI_ADMIN_RSP_RCVD        admin_rsp_rcvd;  /* NFA_HCI_ADMIN_RSP_RCVD         */
+    tNFA_HCI_CONFIG_RSP_RCVD       config_rsp_rcvd;  /* NFA_HCI_CONFIG_RSP_RCVD       */
+#endif
 } tNFA_HCI_EVT_DATA;
+
+#if(NXP_EXTNS == TRUE)
+typedef enum
+{
+    Wait = 0,
+    Release
+}tNFA_HCI_TRANSCV_STATE;
+#endif
 
 /* NFA HCI callback */
 typedef void (tNFA_HCI_CBACK) (tNFA_HCI_EVT event, tNFA_HCI_EVT_DATA *p_data);
@@ -543,7 +596,11 @@ NFC_API extern tNFA_STATUS NFA_HciSendEvent (tNFA_HANDLE hci_handle,
                                             UINT8        *p_data,
                                             UINT16       rsp_size,
                                             UINT8        *p_rsp_buf,
+#if(NXP_EXTNS == TRUE)
+                                            UINT32       rsp_timeout);
+#else
                                             UINT16       rsp_timeout);
+#endif
 
 /*******************************************************************************
 **
@@ -594,6 +651,17 @@ NFC_API extern tNFA_STATUS NFA_HciDeletePipe (tNFA_HANDLE  hci_handle, UINT8 pip
 *******************************************************************************/
 NFC_API extern tNFA_STATUS NFA_HciAddStaticPipe (tNFA_HANDLE hci_handle, UINT8 host, UINT8 gate, UINT8 pipe);
 
+#if((NXP_EXTNS == TRUE) && (NXP_NFCC_MW_RCVRY_BLK_FW_DNLD == TRUE))
+/*******************************************************************************
+**
+** Function         NFA_MW_Fwdnlwd_Recovery
+**
+** Description      This function is called to make the MW_RCVRY_FW_DNLD_ALLOWED TRUE
+**                  not allowing the FW download while MW recovery.
+**
+*******************************************************************************/
+NFC_API extern BOOLEAN NFA_MW_Fwdnlwd_Recovery(BOOLEAN mw_fwdnld_recovery);
+#endif
 /*******************************************************************************
 **
 ** Function         NFA_HciDebug
@@ -602,10 +670,28 @@ NFC_API extern tNFA_STATUS NFA_HciAddStaticPipe (tNFA_HANDLE hci_handle, UINT8 h
 **
 *******************************************************************************/
 NFC_API extern void NFA_HciDebug (UINT8 action, UINT8 size, UINT8 *p_data);
+#if (NXP_EXTNS == TRUE)
+NFC_API extern tNFA_STATUS NFA_HciSendHostTypeListCommand (tNFA_HANDLE hci_handle);
+NFC_API extern tNFA_STATUS NFA_HciConfigureNfceeETSI12 (UINT8 hostId);
+#endif
+#if(NXP_EXTNS == TRUE)
+#if (JCOP_WA_ENABLE == TRUE)
+/*******************************************************************************
+**
+** Function         NFA_HciW4eSETransaction_Complete
+**
+** Description      This function is called to wait for eSE transaction
+**                  to complete before NFCC shutdown or NFC service turn OFF
+**
+** Returns          None
+**
+*******************************************************************************/
+NFC_API extern void NFA_HciW4eSETransaction_Complete(tNFA_HCI_TRANSCV_STATE type);
+#endif
+#endif
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* NFA_P2P_API_H */
-

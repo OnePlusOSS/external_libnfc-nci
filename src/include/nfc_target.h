@@ -15,7 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 #ifndef NFC_TARGET_H
 #define NFC_TARGET_H
 
@@ -34,6 +52,10 @@
 #include "bt_trace.h"
 #endif
 
+#if (NXP_EXTNS == TRUE)
+#include <NXP_NFCC_Features.h>
+#include <NXP_ESE_Features.h>
+#endif
 
 /* API macros for DLL (needed to export API functions from DLLs) */
 #define NFC_API         EXPORT_API
@@ -285,7 +307,7 @@
 
 /* RW Type 3 Tag timeout for each API call, in ms */
 #ifndef RW_T3T_TOUT_RESP
-#define RW_T3T_TOUT_RESP            100         /* NFC-Android will use 100 instead of 75 for T3t presence-check */
+#define RW_T3T_TOUT_RESP            500         /* increased T3t presence-check time from 100 to 500, as Felica Secure mode commands require longer time to process */
 #endif
 
 /* CE Type 3 Tag maximum response timeout index (for check and update, used in SENSF_RES) */
@@ -525,6 +547,10 @@
 #define NFA_HCI_MAX_HOST_IN_NETWORK 0x06
 #endif
 
+#if(NXP_EXTNS == TRUE)
+#define NFA_HCI_MAX_NO_HOST_ETSI12 0x03
+#endif
+
 /* Max number of Application that can be registered to NFA-HCI */
 #ifndef NFA_HCI_MAX_APP_CB
 #define NFA_HCI_MAX_APP_CB          0x05
@@ -541,8 +567,19 @@
 #endif
 
 /* Timeout for waiting for the response to HCP Command packet */
+#if(NXP_EXTNS == TRUE)
+#ifndef NFA_HCI_RESPONSE_TIMEOUT
+/*
+ * NOTE : HCI Response will be received only after Credit Ntf is received.
+ *        If credit Ntf timeout is triggered then response timer will also be stopped.
+ *        So NFA_HCI_RESPONSE_TIMEOUT should always NFC_NCI_WAIT_DATA_NTF_TOUT + 1s
+ * */
+#define NFA_HCI_RESPONSE_TIMEOUT    3000
+#endif
+#else
 #ifndef NFA_HCI_RESPONSE_TIMEOUT
 #define NFA_HCI_RESPONSE_TIMEOUT    1000
+#endif
 #endif
 
 /* Default poll duration (may be over-ridden using NFA_SetRfDiscoveryDuration) */
@@ -574,6 +611,9 @@
 #ifndef NFA_DM_MAX_PRESENCE_CHECK_TIMEOUT
 #define NFA_DM_MAX_PRESENCE_CHECK_TIMEOUT           500
 #endif
+#if(NXP_EXTNS == TRUE)
+#define NFA_DM_ISO_15693_MAX_PRESENCE_CHECK_TIMEOUT           500
+#endif
 
 /* Default delay to auto presence check after sending raw frame */
 #ifndef NFA_DM_DEFAULT_PRESENCE_CHECK_START_DELAY
@@ -593,7 +633,11 @@
 /* Maximum number of listen entries configured/registered with NFA_CeConfigureUiccListenTech, */
 /* NFA_CeRegisterFelicaSystemCodeOnDH, or NFA_CeRegisterT4tAidOnDH                            */
 #ifndef NFA_CE_LISTEN_INFO_MAX
+#if(NXP_EXTNS == TRUE)
+#define NFA_CE_LISTEN_INFO_MAX        10
+#else
 #define NFA_CE_LISTEN_INFO_MAX        5
+#endif
 #endif
 
 #ifndef NFA_CHO_INCLUDED
@@ -660,12 +704,30 @@
 
 /* Max number of NFCEE supported */
 #ifndef NFA_EE_MAX_EE_SUPPORTED
+#if(NXP_EXTNS == TRUE)
+#if(NXP_NFCC_DYNAMIC_DUAL_UICC == TRUE)
+#define NFA_EE_MAX_EE_SUPPORTED         4 //Wait for UICC Init complete.
+#else
+#define NFA_EE_MAX_EE_SUPPORTED         3 //Wait for UICC Init complete.
+#endif
+#else
 #define NFA_EE_MAX_EE_SUPPORTED         4           /* Modified for NFC-A until we add dynamic support */
+#endif
 #endif
 
 /* Maximum number of AID entries per target_handle  */
 #ifndef NFA_EE_MAX_AID_ENTRIES
-#define NFA_EE_MAX_AID_ENTRIES      (32)
+#if(NXP_EXTNS == TRUE)
+#define NFA_EE_MIN_AID_SIZE         (5)
+#define NFA_EE_MIN_AID_ENTRY_SIZE   (NFA_EE_MIN_AID_SIZE + 4)
+#if(NFC_NXP_CHIP_TYPE != PN547C2)
+#define NFA_EE_MAX_AID_ENTRIES      (50)
+#else
+#define NFA_EE_MAX_AID_ENTRIES      (20)
+#endif
+#else
+#define NFA_EE_MAX_AID_ENTRIES      (10)
+#endif
 #endif
 
 /* Maximum number of callback functions can be registered through NFA_EeRegister() */
@@ -708,6 +770,3 @@
 
 
 #endif /* NFC_TARGET_H */
-
-
-

@@ -15,7 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -31,9 +49,12 @@
 #include "nci_defs.h"
 #include "nfc_hal_api.h"
 #include "gki.h"
-
 #include "vendor_cfg.h"
-
+#if (NXP_EXTNS == TRUE)
+#include <NXP_NFCC_Features.h>
+#include <NXP_ESE_Features.h>
+#include <NXP_Platform_Features.h>
+#endif
 /* NFC application return status codes */
 #define NFC_STATUS_OK                   NCI_STATUS_OK                   /* Command succeeded    */
 #define NFC_STATUS_REJECTED             NCI_STATUS_REJECTED             /* Command is rejected. */
@@ -58,9 +79,28 @@
 #define NFC_STATUS_EE_PROTOCOL_ERR      NCI_STATUS_EE_PROTOCOL_ERR      /* EE protocol error    */
 #define NFC_STATUS_EE_TIMEOUT           NCI_STATUS_EE_TIMEOUT           /* EE Timeout           */
 
+#if (NXP_EXTNS == TRUE)
+//DTA API for MW Version need to change according to release
+#define NXP_EN_PN547C2                  0
+#define NXP_EN_PN65T                    0
+#define NXP_EN_PN548C2                  1
+#define NXP_EN_PN66T                    1
+#define NXP_EN_PN551                    1
+#define NXP_EN_PN67T                    1
+#define NXP_EN_PN553                    0
+#define NXP_EN_PN80T                    0
+#define NXP_ANDROID_VER                 (7U) /* NXP android version */
+#define NFC_NXP_MW_VERSION_MAJ          (0U) /* MW Major Version */
+#define NFC_NXP_MW_VERSION_MIN          (3U) /* MW Minor Version */
+#endif
 /* 0xE0 ~0xFF are proprietary status codes */
 #define NFC_STATUS_CMD_STARTED          0xE3/* Command started successfully                     */
+#if (NXP_EXTNS == TRUE)
+#define NFC_STATUS_HW_TIMEOUT           0xEC/* changed from 0xE4 (as 0xE4 is defined for STATUS_EMVCO_PCD_COLLISOIN
+                                             NFCC Timeout in responding to an NCI command     */
+#else
 #define NFC_STATUS_HW_TIMEOUT           0xE4/* NFCC Timeout in responding to an NCI command     */
+#endif
 #define NFC_STATUS_CONTINUE             0xE5/* More (same) event to follow                      */
 #define NFC_STATUS_REFUSED              0xE6/* API is called to perform illegal function        */
 #define NFC_STATUS_BAD_RESP             0xE7/* Wrong format of R-APDU, CC file or NDEF file     */
@@ -74,6 +114,11 @@
 #define NFC_STATUS_BAD_HANDLE           0xFE                      /* invalid handle             */
 #define NFC_STATUS_CONGESTED            0xFF                      /* congested                  */
 typedef UINT8 tNFC_STATUS;
+#if (NXP_EXTNS == TRUE)
+#define NFC_NFCC_INIT_MAX_RETRY         2
+#define NFC_NORMAL_BOOT_MODE            0
+#define NFC_FAST_BOOT_MODE              1
+#endif
 
 
 
@@ -186,7 +231,8 @@ enum
     NFC_NFCC_TRANSPORT_ERR_REVT,            /* 16 NCI Tranport error            */
     NFC_NFCC_POWER_OFF_REVT,                /* 17 NFCC turned off               */
 
-    NFC_FIRST_VS_REVT                       /* First vendor-specific rsp event  */
+    NFC_FIRST_VS_REVT,                       /* First vendor-specific rsp event  */
+    NFC_NFCEE_PWR_LNK_CTRL_REVT              /* PWR LINK CTRL Event for Wired Mode standby */
 };
 typedef UINT16 tNFC_RESPONSE_EVT;
 
@@ -197,7 +243,10 @@ enum
     NFC_DEACTIVATE_CEVT,                    /* 2  Deactivate response/notificatn*/
     NFC_DATA_CEVT,                          /* 3  Data                          */
     NFC_ERROR_CEVT,                         /* 4  generic or interface error    */
-    NFC_DATA_START_CEVT                     /* 5  received the first fragment on RF link */
+    NFC_DATA_START_CEVT,                    /* 5  received the first fragment on RF link */
+#if (NXP_EXTNS == TRUE)
+    NFC_RF_WTX_CEVT                         /* 6  received rf wtx */
+#endif
 };
 typedef UINT16 tNFC_CONN_EVT;
 
@@ -236,6 +285,17 @@ typedef struct
     UINT8                   *p_param_tlvs;  /* TLV                  */
 } tNFC_GET_CONFIG_REVT;
 
+#if(NXP_EXTNS == TRUE)
+/* This data type is for FW Version */
+typedef struct
+{
+    UINT8           rom_code_version;    /* ROM code Version  */
+    UINT8           major_version;       /* Major Version */
+    UINT8           minor_version;       /* Minor Version  */
+} tNFC_FW_VERSION;
+#endif
+
+
 /* the data type associated with NFC_NFCEE_DISCOVER_REVT */
 typedef struct
 {
@@ -254,7 +314,11 @@ typedef UINT8 tNFC_NFCEE_INTERFACE;
 #define NFC_NFCEE_TAG_ATR_BYTES         NCI_NFCEE_TAG_ATR_BYTES
 #define NFC_NFCEE_TAG_T3T_INFO          NCI_NFCEE_TAG_T3T_INFO
 #define NFC_NFCEE_TAG_HCI_HOST_ID       NCI_NFCEE_TAG_HCI_HOST_ID
+#if(NXP_EXTNS == TRUE)
+typedef UINT16 tNFC_NFCEE_TAG;
+#else
 typedef UINT8 tNFC_NFCEE_TAG;
+#endif
 /* additional NFCEE Info */
 typedef struct
 {
@@ -289,16 +353,26 @@ typedef struct
     tNFC_NFCEE_MODE         mode;                   /* NFCEE mode       */
 } tNFC_NFCEE_MODE_SET_REVT;
 
+typedef struct
+{
+    tNFC_STATUS             status;                 /* The event status.*/
+    UINT8                   nfcee_id;               /* NFCEE ID         */
+} tNFC_NFCEE_EE_PWR_LNK_REVT;
+
 #define NFC_MAX_AID_LEN     NCI_MAX_AID_LEN     /* 16 */
 
 /* the data type associated with NFC_CE_GET_ROUTING_REVT */
+
+/* Max payload size  */
+#define NFC_MAX_GET_ROUTING_PLD_SIZE    255
+
 typedef struct
 {
     tNFC_STATUS             status;         /* The event status                 */
     UINT8                   nfcee_id;       /* NFCEE ID                         */
     UINT8                   num_tlvs;       /* number of TLVs                   */
     UINT8                   tlv_size;       /* the total len of all TLVs        */
-    UINT8                   param_tlvs[NFC_MAX_EE_TLV_SIZE];/* the TLVs         */
+    UINT8                   param_tlvs[NFC_MAX_GET_ROUTING_PLD_SIZE];/* the TLVs*/
 } tNFC_GET_ROUTING_REVT;
 
 
@@ -346,6 +420,11 @@ typedef UINT8 tNFC_RF_TECH;
 #define NFC_PROTOCOL_ISO_DEP    NCI_PROTOCOL_ISO_DEP  /* Type 4A,4B  - NFC-A or NFC-B   */
 #define NFC_PROTOCOL_NFC_DEP    NCI_PROTOCOL_NFC_DEP  /* NFCDEP/LLCP - NFC-A or NFC-F       */
 #define NFC_PROTOCOL_MIFARE     NCI_PROTOCOL_MIFARE
+#if (NXP_EXTNS == TRUE)
+#define NFC_PROTOCOL_ISO7816    NCI_PROTOCOL_ISO7816 /*ISO7816 -AID default Routing */
+#define NFC_PROTOCOL_ISO7816    NCI_PROTOCOL_ISO7816
+#define NFC_PROTOCOL_T3BT       NCI_PROTOCOL_T3BT
+#endif
 #define NFC_PROTOCOL_B_PRIME    NCI_PROTOCOL_B_PRIME
 #define NFC_PROTOCOL_15693      NCI_PROTOCOL_15693
 #define NFC_PROTOCOL_KOVIO      NCI_PROTOCOL_KOVIO
@@ -495,6 +574,9 @@ typedef union
     tNFC_NFCEE_DISCOVER_REVT    nfcee_discover;
     tNFC_NFCEE_INFO_REVT        nfcee_info;
     tNFC_NFCEE_MODE_SET_REVT    mode_set;
+#if (NXP_EXTNS == TRUE) && (NXP_WIRED_MODE_STANDBY == TRUE)
+    tNFC_NFCEE_EE_PWR_LNK_REVT  pwr_lnk_ctrl;
+#endif
     tNFC_RF_FIELD_REVT          rf_field;
     tNFC_STATUS                 cfg_routing;
     tNFC_GET_ROUTING_REVT       get_routing;
@@ -536,11 +618,18 @@ typedef tNFC_STATUS tNFC_START_DEVT;
 typedef tNCI_RF_PA_PARAMS tNFC_RF_PA_PARAMS;
 #define NFC_MAX_SENSB_RES_LEN         NCI_MAX_SENSB_RES_LEN
 #define NFC_NFCID0_MAX_LEN          4
+#if (NXP_EXTNS == TRUE)
+#define NFC_PUPIID_MAX_LEN          8
+#endif
 typedef struct
 {
     UINT8       sensb_res_len;/* Length of SENSB_RES Response (Byte 2 - Byte 12 or 13) Available after Technology Detection */
     UINT8       sensb_res[NFC_MAX_SENSB_RES_LEN]; /* SENSB_RES Response (ATQ) */
     UINT8       nfcid0[NFC_NFCID0_MAX_LEN];
+#if (NXP_EXTNS == TRUE)
+    UINT8       pupiid_len;
+    UINT8       pupiid[NFC_PUPIID_MAX_LEN];
+#endif
 } tNFC_RF_PB_PARAMS;
 
 #define NFC_MAX_SENSF_RES_LEN       NCI_MAX_SENSF_RES_LEN
@@ -884,7 +973,11 @@ NFC_API extern void NFC_Disable (void);
 ** Returns          nothing
 **
 *******************************************************************************/
+#if(NXP_EXTNS == TRUE)
+NFC_API extern void NFC_Init(tHAL_NFC_CONTEXT *p_hal_entry_cntxt);
+#else
 NFC_API extern void NFC_Init(tHAL_NFC_ENTRY *p_hal_entry_tbl);
+#endif
 
 /*******************************************************************************
 **
@@ -966,6 +1059,7 @@ NFC_API extern tNFC_STATUS NFC_NfceeDiscover (BOOLEAN discover);
 *******************************************************************************/
 NFC_API extern tNFC_STATUS NFC_NfceeModeSet (UINT8              nfcee_id,
                                              tNFC_NFCEE_MODE    mode);
+
 /*******************************************************************************
 **
 ** Function         NFC_DiscoveryMap
@@ -1245,6 +1339,24 @@ NFC_API extern tNFC_STATUS NFC_SendVsCommand(UINT8          oid,
                                              BT_HDR        *p_data,
                                              tNFC_VS_CBACK *p_cback);
 
+#if (NXP_EXTNS == TRUE)
+/*******************************************************************************
+**
+** Function         NFC_SendNxpNciCommand
+**
+** Description      This function is called to send the given nxp specific
+**                  command to NFCC. The response from NFCC is reported to the
+**                  given tNFC_VS_CBACK.
+**
+** Parameters       p_data - The command buffer
+**
+** Returns          tNFC_STATUS
+**
+*******************************************************************************/
+NFC_API extern tNFC_STATUS NFC_SendNxpNciCommand (BT_HDR        *p_data,
+                               tNFC_VS_CBACK *p_cback);
+#endif
+
 /*******************************************************************************
 **
 ** Function         NFC_TestLoopback
@@ -1287,6 +1399,181 @@ NFC_API extern UINT8 NFC_SetTraceLevel (UINT8 new_level);
 **
 *******************************************************************************/
 NFC_API extern char * NFC_GetStatusName (tNFC_STATUS status);
+#endif
+
+#if(NXP_EXTNS == TRUE)
+/*******************************************************************************
+**
+** Function         nfc_ncif_getFWVersion
+**
+** Description      This function sets the trace level for NFC.  If called with
+**                  a value of 0xFF, it simply returns the current trace level.
+**
+** Returns          The new or current trace level
+**
+*******************************************************************************/
+NFC_API extern tNFC_FW_VERSION nfc_ncif_getFWVersion();
+/*******************************************************************************
+**
+** Function         nfc_ncif_storeScreenState
+**
+** Description      This function is called to store the last screen state
+**
+** Returns          void
+**
+*******************************************************************************/
+NFC_API extern void nfc_ncif_storeScreenState(UINT8 state);
+/*******************************************************************************
+**
+** Function         NFC_EnableDisableHalLog
+**
+** Description      This function is used to enable/disable
+**                  HAL log level.
+**
+*******************************************************************************/
+void NFC_EnableDisableHalLog(UINT8 type);
+#if((NFC_NXP_CHIP_TYPE != PN547C2) && (NFC_NXP_AID_MAX_SIZE_DYN == TRUE))
+/*******************************************************************************
+**
+** Function         nfc_ncif_getMaxRoutingTableSize
+**
+** Description      This function is called to get the Max supported routing Table size.
+**
+** Returns           Max supported routing Table size
+**
+*******************************************************************************/
+NFC_API extern UINT16 nfc_ncif_getMaxRoutingTableSize();
+#endif
+#if(NFC_NXP_ESE == TRUE)
+#if (NXP_EXTNS == TRUE) && (NXP_WIRED_MODE_STANDBY == TRUE)
+/*******************************************************************************
+**
+** Function         NFC_Nfcee_PwrLinkCtrl
+**
+** Description      This function is called for NFCC which manages the power supply and
+**                  communication links between the NFCC and its connected NFCEEs.
+**
+** Parameters       nfcee_id   - the NFCEE ID .
+**                  cfg_value  - 0x00 ->Default Value(NFCC decides)
+**                               0x01 ->NFCEE Power Supply always On
+**                               0x03 ->NFCC to NFCEE Communication link always
+**                                      active when the NFCEE is powered on
+** Returns          tNFC_STATUS
+**
+*******************************************************************************/
+NFC_API extern  tNFC_STATUS NFC_Nfcee_PwrLinkCtrl(UINT8 nfcee_id, UINT8 cfg_value);
+#endif
+
+/*******************************************************************************
+**
+** Function         NFC_ReqWiredAccess
+**
+** Description      This function request to pn54x driver to get access
+**                  of P61. Status would be updated to pdata
+**
+** Returns          0 if api call success, else -1
+**
+*******************************************************************************/
+INT32 NFC_ReqWiredAccess (void *pdata);
+/*******************************************************************************
+**
+** Function         NFC_RelWiredAccess
+**
+** Description      This function release access
+**                  of P61. Status would be updated to pdata
+**
+** Returns          0 if api call success, else -1
+**
+*******************************************************************************/
+INT32 NFC_RelWiredAccess (void *pdata);
+/*******************************************************************************
+**
+** Function         NFC_GetWiredAccess
+**
+** Description      This function gets the current access state
+**                  of P61. Current state would be updated to pdata
+**
+** Returns          0 if api call success, else -1
+**
+*******************************************************************************/
+INT32 NFC_GetP61Status (void *pdata);
+/*******************************************************************************
+**
+** Function         NFC_DisableWired
+**
+** Description      This function request to pn54x driver to
+**                  disable ese vdd gpio
+**
+** Returns          0 if api call success, else -1
+**
+*******************************************************************************/
+INT32 NFC_DisableWired (void *pdata);
+/*******************************************************************************
+**
+** Function         NFC_P73ISOReset
+**
+** Description      This function request to reset P73
+**
+** Returns          0 if api call success, else -1
+**
+*******************************************************************************/
+INT32 NFC_P73ISOReset (void *pdata);
+/*******************************************************************************
+**
+** Function         NFC_EnableWired
+**
+** Description      This function request to pn54x driver to
+**                  enable ese vdd gpio
+**
+** Returns          0 if api call success, else -1
+**
+*******************************************************************************/
+INT32 NFC_EnableWired (void *pdata);
+
+#if((NFC_NXP_ESE_VER == JCOP_VER_3_1) || (NFC_NXP_ESE_VER == JCOP_VER_3_2))
+/*******************************************************************************
+**
+** Function         NFC_GetEseAccess
+**
+** Description      This function request to pn54x driver to get access
+**                  of P61. it returns 0 on success. This api waits maximum
+**                  defined timeout
+**
+** Returns          0 if api call success, else -1
+**
+*******************************************************************************/
+INT32 NFC_GetEseAccess (void *pdata);
+
+/*******************************************************************************
+**
+** Function         NFC_RelEseAccess
+**
+** Description      This function release access of P61.
+**                  it returns 0 on success.
+**
+** Returns          0 if api call success, else -1
+**
+*******************************************************************************/
+INT32 NFC_RelEseAccess (void *pdata);
+
+#endif
+
+#if ((NFC_NXP_CHIP_TYPE == PN548C2) || (NFC_NXP_CHIP_TYPE == PN551))
+/*******************************************************************************
+**
+** Function         NFC_RelSvddWait
+**
+** Description      This function release wait for svdd change
+**                  of P61. Status would be updated to pdata
+**
+** Returns          0 if api call success, else -1
+**
+*******************************************************************************/
+INT32 NFC_RelSvddWait (void *pdata);
+#endif
+
+#endif
+
 #endif
 
 #ifdef __cplusplus

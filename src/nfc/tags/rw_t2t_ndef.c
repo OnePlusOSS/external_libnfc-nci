@@ -15,7 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -88,6 +106,15 @@ void rw_t2t_handle_rsp (UINT8 *p_data)
     {
         p_t2t->b_read_hdr = TRUE;
         memcpy (p_t2t->tag_hdr,  p_data, T2T_READ_DATA_LEN);
+#if(NXP_EXTNS == TRUE)
+        /* On Ultralight - C tag, if CC is corrupt, correct it */
+        if (  (p_t2t->tag_hdr[0] == TAG_MIFARE_MID)
+            &&(p_t2t->tag_hdr[T2T_CC2_TMS_BYTE] >= T2T_INVALID_CC_TMS_VAL0)
+            &&(p_t2t->tag_hdr[T2T_CC2_TMS_BYTE] <= T2T_INVALID_CC_TMS_VAL1)  )
+        {
+            p_t2t->tag_hdr[T2T_CC2_TMS_BYTE] = T2T_CC2_TMS_MULC;
+        }
+#endif
     }
 
     switch (p_t2t->state)
@@ -207,7 +234,7 @@ tRW_EVENT rw_t2t_info_to_event (const tT2T_CMD_RSP_INFO *p_info)
         break;
 
     default:
-	    rw_event = t2t_info_to_evt (p_info);
+        rw_event = t2t_info_to_evt (p_info);
         break;
     }
     return rw_event;
@@ -258,7 +285,7 @@ static void rw_t2t_handle_cc_read_rsp (void)
 static void rw_t2t_ntf_tlv_detect_complete (tNFC_STATUS status)
 {
     tRW_T2T_CB              *p_t2t  = &rw_cb.tcb.t2t;
-    tRW_DETECT_NDEF_DATA    ndef_data = {0};
+    tRW_DETECT_NDEF_DATA    ndef_data = {0, };
     tRW_DETECT_TLV_DATA     tlv_data;
     tRW_T2T_DETECT          evt_data;
     UINT8                   xx;
@@ -293,14 +320,14 @@ static void rw_t2t_ntf_tlv_detect_complete (tNFC_STATUS status)
         }
 
         rw_t2t_handle_op_complete ();
-        (*rw_cb.p_cback) (RW_T2T_NDEF_DETECT_EVT, (tRW_DATA *) &ndef_data);
+        (*rw_cb.p_cback) (RW_T2T_NDEF_DETECT_EVT, (void *) &ndef_data);
     }
     else if (p_t2t->tlv_detect == TAG_PROPRIETARY_TLV)
     {
         evt_data.msg_len = p_t2t->prop_msg_len;
         evt_data.status  = status;
         rw_t2t_handle_op_complete ();
-        (*rw_cb.p_cback) (RW_T2T_TLV_DETECT_EVT, (tRW_DATA *) &evt_data);
+        (*rw_cb.p_cback) (RW_T2T_TLV_DETECT_EVT, (void *) &evt_data);
     }
     else
     {
@@ -320,7 +347,7 @@ static void rw_t2t_ntf_tlv_detect_complete (tNFC_STATUS status)
         }
         tlv_data.status     = status;
         rw_t2t_handle_op_complete ();
-        (*rw_cb.p_cback) (RW_T2T_TLV_DETECT_EVT, (tRW_DATA *) &tlv_data);
+        (*rw_cb.p_cback) (RW_T2T_TLV_DETECT_EVT, (void *) &tlv_data);
     }
 
 }
@@ -650,6 +677,9 @@ static void rw_t2t_handle_tlv_detect_rsp (UINT8 *p_data)
                 if (  (tlvtype == TAG_LOCK_CTRL_TLV)
                     ||(tlvtype == TAG_NDEF_TLV)  )
                 {
+                    if(p_t2t->bytes_count > 2)
+                        //avoid causing negative index
+                        break;
                     /* Collect Lock TLV */
                     p_t2t->tlv_value[2 - p_t2t->bytes_count] = p_data[offset];
                     if (p_t2t->bytes_count == 0)
@@ -693,6 +723,9 @@ static void rw_t2t_handle_tlv_detect_rsp (UINT8 *p_data)
                 if (  (tlvtype == TAG_MEM_CTRL_TLV)
                     ||(tlvtype == TAG_NDEF_TLV)  )
                 {
+                    if(p_t2t->bytes_count > 2)
+                        //avoid causing negative index
+                        break;
                     p_t2t->tlv_value[2 - p_t2t->bytes_count] = p_data[offset];
                     if (p_t2t->bytes_count == 0)
                     {
@@ -838,6 +871,10 @@ tNFC_STATUS rw_t2t_read_locks (void)
     UINT16      block;
 
     if (  (p_t2t->tag_hdr[T2T_CC3_RWA_BYTE] != T2T_CC3_RWA_RW)
+#if(NXP_EXTNS == TRUE)
+        ||((p_t2t->tag_hdr[0] == TAG_MIFARE_MID) && (p_t2t->tag_hdr[T2T_CC2_TMS_BYTE] == T2T_CC2_TMS_MULC))
+        ||((p_t2t->tag_hdr[0] == TAG_MIFARE_MID) && (p_t2t->tag_hdr[T2T_CC2_TMS_BYTE] == T2T_CC2_TMS_MUL))
+#endif
         ||(p_t2t->skip_dyn_locks)  )
     {
         /* Skip reading dynamic lock bytes if CC is set as Read only or layer above instructs to skip */
@@ -849,7 +886,11 @@ tNFC_STATUS rw_t2t_read_locks (void)
         }
     }
 
-    while (num_locks < p_t2t->num_lockbytes)
+    while ((num_locks < p_t2t->num_lockbytes)
+#if(NXP_EXTNS == TRUE)
+            && (num_locks < RW_T2T_MAX_LOCK_BYTES)
+#endif
+    )
     {
         if (p_t2t->lockbyte[num_locks].b_lock_read == FALSE)
         {
@@ -1616,7 +1657,7 @@ static void rw_t2t_handle_ndef_read_rsp (UINT8 *p_data)
         evt_data.status = failed ? NFC_STATUS_FAILED : NFC_STATUS_OK;
         evt_data.p_data = NULL;
         rw_t2t_handle_op_complete ();
-        (*rw_cb.p_cback) (RW_T2T_NDEF_READ_EVT, (tRW_DATA *) &evt_data);
+        (*rw_cb.p_cback) (RW_T2T_NDEF_READ_EVT, (void *) &evt_data);
     }
 }
 
@@ -1788,7 +1829,7 @@ static void rw_t2t_handle_ndef_write_rsp (UINT8 *p_data)
             p_t2t->ndef_msg_len = p_t2t->new_ndef_msg_len;
         }
         rw_t2t_handle_op_complete ();
-        (*rw_cb.p_cback) (RW_T2T_NDEF_WRITE_EVT, (tRW_DATA *) &evt_data);
+        (*rw_cb.p_cback) (RW_T2T_NDEF_WRITE_EVT, (void *) &evt_data);
     }
 }
 
@@ -2348,7 +2389,11 @@ static void rw_t2t_update_lock_attributes (void)
                 bytes_covered = 0;
                 while (bytes_covered < bytes_locked_per_lock_bit)
                 {
+#if(NXP_EXTNS == TRUE)
+                    if ((p_t2t->lockbyte[num_dyn_lock_bytes].lock_byte & rw_t2t_mask_bits[xx]) && (block_count < RW_T2T_SEGMENT_SIZE))
+#else
                     if (p_t2t->lockbyte[num_dyn_lock_bytes].lock_byte & rw_t2t_mask_bits[xx])
+#endif
                     {
                         /* If the bit is set then it is locked */
                         p_t2t->lock_attr[block_count] |= 0x01 << bits_covered;
@@ -3062,6 +3107,7 @@ tNFC_STATUS RW_T2tWriteNDef (UINT16 msg_len, UINT8 *p_msg)
 {
     tRW_T2T_CB  *p_t2t          = &rw_cb.tcb.t2t;
     UINT16      block;
+    UINT8 offset = 0;
     const       tT2T_INIT_TAG *p_ret;
 
     tNFC_STATUS status          = NFC_STATUS_OK;
@@ -3113,7 +3159,14 @@ tNFC_STATUS RW_T2tWriteNDef (UINT16 msg_len, UINT8 *p_msg)
     {
         p_t2t->state        = RW_T2T_STATE_WRITE_NDEF;
         p_t2t->block_read   = block;
-        rw_t2t_handle_ndef_write_rsp (&p_t2t->tag_data[(block - T2T_FIRST_DATA_BLOCK) * T2T_BLOCK_LEN]);
+        offset              = (block - T2T_FIRST_DATA_BLOCK) * T2T_BLOCK_LEN;
+        if(offset <= T2T_READ_DATA_LEN)
+        rw_t2t_handle_ndef_write_rsp (&p_t2t->tag_data[offset]);
+        else
+        {
+            RW_TRACE_WARNING0 ("tag_data offset exceeds the limit");
+            return (NFC_STATUS_FAILED);
+        }
     }
     else
     {

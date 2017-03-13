@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2014 NXP Semiconductors
+ * Copyright (C) 2015 NXP Semiconductors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,7 +94,7 @@ void phDal4Nfc_msgrelease(intptr_t msqid)
     if(pQueue != NULL)
     {
         sem_post(&pQueue->nProcessSemaphore);
-        usleep (3000);
+        usleep(3000);
         if (sem_destroy(&pQueue->nProcessSemaphore))
         {
             NXPLOG_TML_E("Failed to destroy semaphore (errno=0x%08x)", errno);

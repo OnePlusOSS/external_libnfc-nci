@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2014 NXP Semiconductors
+ * Copyright (C) 2015 NXP Semiconductors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,13 @@
 #define PLATFORM_LIB_PATH FW_DLL_ROOT_DIR "libpn551_fw_platform" FW_DLL_EXTENSION
 /* Upgrade the public Key */
 #define PKU_LIB_PATH      FW_DLL_ROOT_DIR "libpn551_fw_pku"      FW_DLL_EXTENSION
+#elif(NFC_NXP_CHIP_TYPE == PN553)
+/* Actual FW library name*/
+#define FW_LIB_PATH       FLASH_CONF_ROOT_DIR "libpn553tc_fw"      FW_DLL_EXTENSION
+/* Restore Corrupted PLL Settings/etc */
+#define PLATFORM_LIB_PATH FW_DLL_ROOT_DIR "libpn553tc_fw_platform" FW_DLL_EXTENSION
+/* Upgrade the public Key */
+#define PKU_LIB_PATH      FW_DLL_ROOT_DIR "libpn553tc_fw_pku"      FW_DLL_EXTENSION
 #else
 /* Actual FW library name*/
 #define FW_LIB_PATH       FW_DLL_ROOT_DIR "libpn547_fw"          FW_DLL_EXTENSION
@@ -62,14 +69,25 @@
 
 #if(NFC_NXP_CHIP_TYPE == PN548C2)
 #define COMPILATION_MW "PN548C2"
+#elif(NFC_NXP_CHIP_TYPE == PN551)
+#define COMPILATION_MW "PN551"
+#elif(NFC_NXP_CHIP_TYPE == PN553)
+#define COMPILATION_MW "PN553"
 #else
 #define COMPILATION_MW "PN547C2"
 #endif
-
 /* HAL Version number (Updated as per release) */
-#define NXP_MW_VERSION_MAJ  (3U)
-#define NXP_MW_VERSION_MIN  (5U)
+#define NXP_MW_VERSION_MAJ  (0U)
+#define NXP_MW_VERSION_MIN  (3U)
 
+#define GET_EEPROM_DATA (1U)
+#define SET_EEPROM_DATA (2U)
+
+#define BITWISE    (1U)
+#define BYTEWISE   (2U)
+
+#define GET_FW_DWNLD_FLAG   (1U)
+#define RESET_FW_DWNLD_FLAG (2U)
 /*
  *****************************************************************
  ***********  System clock source selection configuration ********

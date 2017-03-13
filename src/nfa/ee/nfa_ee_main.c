@@ -15,8 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 /******************************************************************************
  *
  *  This is the main implementation file for the NFA EE.
@@ -37,6 +54,12 @@ extern void nfa_ee_vs_cback (tNFC_VS_EVT event, BT_HDR *p_data);
 /* system manager control block definition */
 #if NFA_DYNAMIC_MEMORY == FALSE
 tNFA_EE_CB nfa_ee_cb;
+#endif
+
+#if(NXP_EXTNS == TRUE)
+#ifndef NFA_EE_DISCV_TIMEOUT_VAL
+#define NFA_EE_DISCV_TIMEOUT_VAL    4000 //Wait for UICC Init complete.
+#endif
 #endif
 
 /*****************************************************************************
@@ -73,6 +96,9 @@ const tNFA_EE_SM_ACT nfa_ee_actions[] =
     nfa_ee_nci_disc_rsp     ,   /* NFA_EE_NCI_DISC_RSP_EVT      */
     nfa_ee_nci_disc_ntf     ,   /* NFA_EE_NCI_DISC_NTF_EVT      */
     nfa_ee_nci_mode_set_rsp ,   /* NFA_EE_NCI_MODE_SET_RSP_EVT  */
+#if (NXP_EXTNS == TRUE) && (NXP_WIRED_MODE_STANDBY == TRUE)
+    nfa_ee_nci_pwr_link_ctrl_rsp,  /*NFA_EE_NCI_PWR_LNK_CTRL_RSP_EVT*/
+#endif
     nfa_ee_nci_conn         ,   /* NFA_EE_NCI_CONN_EVT          */
     nfa_ee_nci_conn         ,   /* NFA_EE_NCI_DATA_EVT          */
     nfa_ee_nci_action_ntf   ,   /* NFA_EE_NCI_ACTION_NTF_EVT    */
@@ -110,7 +136,10 @@ void nfa_ee_init (void)
 
     nfa_ee_cb.ecb[NFA_EE_CB_4_DH].ee_status       = NFC_NFCEE_STATUS_ACTIVE;
     nfa_ee_cb.ecb[NFA_EE_CB_4_DH].nfcee_id        = NFC_DH_ID;
-
+#if (NXP_EXTNS == TRUE)
+    /*clear the p61 ce*/
+    nfa_ee_ce_p61_active = 0;
+#endif
     /* register message handler on NFA SYS */
     nfa_sys_register (NFA_ID_EE,  &nfa_ee_sys_reg);
 }
@@ -196,7 +225,7 @@ void nfa_ee_restore_one_ecb (tNFA_EE_ECB *p_cb)
             rsp.nfcee_id    = p_cb->nfcee_id;
             rsp.status      = NFA_STATUS_OK;
             ee_msg.p_data   = &rsp;
-            nfa_ee_nci_mode_set_rsp ((tNFA_EE_MSG *) &ee_msg);
+            nfa_ee_nci_mode_set_rsp ((void *) &ee_msg);
         }
     }
 }
@@ -304,7 +333,7 @@ void nfa_ee_proc_hci_info_cback (void)
             {
                 nfa_sys_stop_timer (&nfa_ee_cb.discv_timer);
                 data.hdr.event = NFA_EE_DISCV_TIMEOUT_EVT;
-                nfa_ee_evt_hdlr((BT_HDR *)&data);
+                nfa_ee_evt_hdlr((void *)&data);
             }
         }
     }
@@ -324,7 +353,6 @@ void nfa_ee_proc_evt (tNFC_RESPONSE_EVT event, void *p_data)
 {
     tNFA_EE_INT_EVT         int_event=0;
     tNFA_EE_NCI_WAIT_RSP    cbk;
-    BT_HDR                  *p_hdr;
 
     switch (event)
     {
@@ -352,16 +380,21 @@ void nfa_ee_proc_evt (tNFC_RESPONSE_EVT event, void *p_data)
         int_event   = NFA_EE_NCI_WAIT_RSP_EVT;
         cbk.opcode  = NCI_MSG_RF_SET_ROUTING;
         break;
+
+#if (NXP_EXTNS == TRUE) && (NXP_WIRED_MODE_STANDBY == TRUE)
+    case NFC_NFCEE_PWR_LNK_CTRL_REVT:                /* 6  NFCEE PWR LNK CTRL response */
+        int_event   = NFA_EE_NCI_PWR_LNK_CTRL_RSP_EVT;
+        break;
+#endif
     }
 
     NFA_TRACE_DEBUG2 ("nfa_ee_proc_evt: event=0x%02x int_event:0x%x", event, int_event);
     if (int_event)
     {
-        p_hdr           = (BT_HDR *) &cbk;
         cbk.hdr.event   = int_event;
         cbk.p_data      = p_data;
 
-        nfa_ee_evt_hdlr (p_hdr);
+        nfa_ee_evt_hdlr ((void *) &cbk);
     }
 
 }
@@ -627,6 +660,10 @@ static char *nfa_ee_sm_evt_2_str (UINT16 event)
         return "NCI_DISC_NTF";
     case NFA_EE_NCI_MODE_SET_RSP_EVT:
         return "NCI_MODE_SET";
+#if (NXP_EXTNS == TRUE) && (NXP_WIRED_MODE_STANDBY == TRUE)
+    case NFA_EE_NCI_PWR_LNK_CTRL_RSP_EVT:
+        return "NCI_PWR_LNK_CTRL";
+#endif
     case NFA_EE_NCI_CONN_EVT:
         return "NCI_CONN";
     case NFA_EE_NCI_DATA_EVT:
@@ -673,6 +710,15 @@ BOOLEAN nfa_ee_evt_hdlr (BT_HDR *p_msg)
     NFA_TRACE_DEBUG2 ("nfa_ee_evt_hdlr (): Event 0x%02x, State: %d", p_evt_data->hdr.event, nfa_ee_cb.em_state);
 #endif
 
+#if(NXP_EXTNS == TRUE)
+    /*This is required to receive Reader Over SWP event*/
+    if(p_evt_data->hdr.event == NFA_EE_NCI_DISC_NTF_EVT)
+    {
+        NFA_TRACE_DEBUG0("recived dis_ntf; stopping timer");
+        nfa_sys_stop_timer(&nfa_ee_cb.discv_timer);
+    }
+#endif
+
     switch (nfa_ee_cb.em_state)
     {
     case NFA_EE_EM_STATE_INIT_DONE:
@@ -704,5 +750,3 @@ BOOLEAN nfa_ee_evt_hdlr (BT_HDR *p_msg)
 
     return TRUE;
 }
-
-

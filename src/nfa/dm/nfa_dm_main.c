@@ -15,6 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 
 /******************************************************************************
@@ -28,6 +47,9 @@
 #include "nfa_sys.h"
 #include "nfa_dm_int.h"
 #include "nfa_sys_int.h"
+#if(NXP_EXTNS == TRUE)
+#include "nfc_int.h"
+#endif
 
 
 /*****************************************************************************
@@ -42,7 +64,11 @@ static const tNFA_SYS_REG nfa_dm_sys_reg =
 };
 
 
-tNFA_DM_CB  nfa_dm_cb = {FALSE};
+#if(NXP_EXTNS == TRUE)
+tNFA_DM_CB  nfa_dm_cb;
+#else
+tNFA_DM_CB  nfa_dm_cb = {0, };
+#endif
 
 
 #define NFA_DM_NUM_ACTIONS  (NFA_DM_MAX_EVT & 0x00ff)
@@ -64,6 +90,7 @@ const tNFA_DM_ACTION nfa_dm_action[] =
     nfa_dm_act_disable_polling,         /* NFA_DM_API_DISABLE_POLLING_EVT       */
     nfa_dm_act_enable_listening,        /* NFA_DM_API_ENABLE_LISTENING_EVT      */
     nfa_dm_act_disable_listening,       /* NFA_DM_API_DISABLE_LISTENING_EVT     */
+    nfa_dm_act_disable_passive_listening,/* NFA_DM_API_DISABLE_PASSIVE_LISTENING_EVT     */
     nfa_dm_act_pause_p2p,               /* NFA_DM_API_PAUSE_P2P_EVT             */
     nfa_dm_act_resume_p2p,              /* NFA_DM_API_RESUME_P2P_EVT            */
     nfa_dm_act_send_raw_frame,          /* NFA_DM_API_RAW_FRAME_EVT             */
@@ -80,6 +107,9 @@ const tNFA_DM_ACTION nfa_dm_action[] =
     nfa_dm_act_reg_vsc,                 /* NFA_DM_API_REG_VSC_EVT               */
     nfa_dm_act_send_vsc,                /* NFA_DM_API_SEND_VSC_EVT              */
     nfa_dm_act_disable_timeout          /* NFA_DM_TIMEOUT_DISABLE_EVT           */
+#if (NXP_EXTNS == TRUE)
+    , nfa_dm_act_send_nxp                 /* NFA_DM_API_SEND_NXP_EVT              */
+#endif
 };
 
 /*****************************************************************************
@@ -87,6 +117,9 @@ const tNFA_DM_ACTION nfa_dm_action[] =
 *****************************************************************************/
 #if (BT_TRACE_VERBOSE == TRUE)
 static char *nfa_dm_evt_2_str (UINT16 event);
+#endif
+#if(NXP_EXTNS == TRUE)
+void nfa_dm_init_cfgs (phNxpNci_getCfg_info_t* mGetCfg_info);
 #endif
 /*******************************************************************************
 **
@@ -190,7 +223,11 @@ BOOLEAN nfa_dm_is_protocol_supported (tNFC_PROTOCOL protocol, UINT8 sel_res)
             ||(protocol == NFC_PROTOCOL_T3T)
             ||(protocol == NFC_PROTOCOL_ISO_DEP)
             ||(protocol == NFC_PROTOCOL_NFC_DEP)
-            ||(protocol == NFC_PROTOCOL_15693)  );
+            ||(protocol == NFC_PROTOCOL_15693)
+#if(NXP_EXTNS == TRUE)
+            ||(protocol == NFC_PROTOCOL_T3BT)
+#endif
+            );
 }
 /*******************************************************************************
 **
@@ -225,13 +262,17 @@ BOOLEAN nfa_dm_is_active (void)
 *******************************************************************************/
 tNFA_STATUS nfa_dm_check_set_config (UINT8 tlv_list_len, UINT8 *p_tlv_list, BOOLEAN app_init)
 {
+#if (NXP_EXTNS == TRUE)
+    UINT8 type, len, *p_value, *p_stored = NULL, max_len = 0;
+#else
     UINT8 type, len, *p_value, *p_stored, max_len;
+#endif
     UINT8 xx = 0, updated_len = 0, *p_cur_len;
     BOOLEAN update;
     tNFC_STATUS nfc_status;
     UINT32 cur_bit;
 
-    NFA_TRACE_DEBUG0 ("nfa_dm_check_set_config ()");
+    NFA_TRACE_DEBUG1 ("nfa_dm_check_set_config () tlv_len=%d",tlv_list_len);
 
     /* We only allow 32 pending SET_CONFIGs */
     if (nfa_dm_cb.setcfg_pending_num >= NFA_DM_SETCONFIG_PENDING_MAX)
@@ -295,9 +336,20 @@ tNFA_STATUS nfa_dm_check_set_config (UINT8 tlv_list_len, UINT8 *p_tlv_list, BOOL
         **  Listen B Configuration
         */
         case NFC_PMID_LB_SENSB_INFO:
-            p_stored  = nfa_dm_cb.params.lb_sensb_info;
-            max_len   = NCI_PARAM_LEN_LB_SENSB_INFO;
-            p_cur_len = &nfa_dm_cb.params.lb_sensb_info_len;
+#if(NXP_EXTNS == TRUE)
+            if(app_init == TRUE)
+            {
+#endif
+                p_stored  = nfa_dm_cb.params.lb_sensb_info;
+                max_len   = NCI_PARAM_LEN_LB_SENSB_INFO;
+                p_cur_len = &nfa_dm_cb.params.lb_sensb_info_len;
+#if(NXP_EXTNS == TRUE)
+            }
+            else
+            {
+                update = FALSE;
+            }
+#endif
             break;
         case NFC_PMID_LB_NFCID0:
             p_stored  = nfa_dm_cb.params.lb_nfcid0;
@@ -333,11 +385,11 @@ tNFA_STATUS nfa_dm_check_set_config (UINT8 tlv_list_len, UINT8 *p_tlv_list, BOOL
             max_len   = NCI_PARAM_LEN_LF_T3T_FLAGS2;
             p_cur_len = &nfa_dm_cb.params.lf_t3t_flags2_len;
             break;
+#if(NXP_EXTNS != TRUE)
         case NFC_PMID_LF_T3T_PMM:
             p_stored = nfa_dm_cb.params.lf_t3t_pmm;
             max_len  = NCI_PARAM_LEN_LF_T3T_PMM;
             break;
-
         /*
         **  ISO-DEP and NFC-DEP Configuration
         */
@@ -345,6 +397,7 @@ tNFA_STATUS nfa_dm_check_set_config (UINT8 tlv_list_len, UINT8 *p_tlv_list, BOOL
             p_stored = nfa_dm_cb.params.fwi;
             max_len  = NCI_PARAM_LEN_FWI;
             break;
+#endif
         case NFC_PMID_WT:
             p_stored = nfa_dm_cb.params.wt;
             max_len  = NCI_PARAM_LEN_WT;
@@ -390,6 +443,13 @@ tNFA_STATUS nfa_dm_check_set_config (UINT8 tlv_list_len, UINT8 *p_tlv_list, BOOL
                 {
                     update = TRUE;
                 }
+#if(NXP_EXTNS == TRUE)
+                else if(appl_dta_mode_flag && app_init)
+                {/*In DTA mode, config update is forced so that length of config params
+                  (i.e update_len) is updated accordingly even for setconfig have only one tlv*/
+                    update = TRUE;
+                }
+#endif
             }
             else if (len == max_len)  /* fixed length */
             {
@@ -397,6 +457,13 @@ tNFA_STATUS nfa_dm_check_set_config (UINT8 tlv_list_len, UINT8 *p_tlv_list, BOOL
                 {
                     update = TRUE;
                 }
+#if(NXP_EXTNS == TRUE)
+                else if(appl_dta_mode_flag && app_init)
+                {/*In DTA mode, config update is forced so that length of config params
+                  (i.e update_len) is updated accordingly even for setconfig have only one tlv*/
+                    update = TRUE;
+                }
+#endif
             }
         }
 
@@ -419,8 +486,25 @@ tNFA_STATUS nfa_dm_check_set_config (UINT8 tlv_list_len, UINT8 *p_tlv_list, BOOL
     }
 
     /* If any TVLs to update, or if the SetConfig was initiated by the application, then send the SET_CONFIG command */
-    if (updated_len || app_init)
+    /*if (updated_len || app_init) app_init is TRUE when setconfig is invoked from application. For extra setconfigs from internal to
+    stack, updated_len will be true. To avoid extra setconfigs from stack which is NOT required by DTA, condition is modified*/
+    if
+#if(NXP_EXTNS == TRUE)
+    ((
+#endif
+       (updated_len || app_init)
+#if(NXP_EXTNS == TRUE)
+       && (appl_dta_mode_flag == 0x00 ))
+       || ((appl_dta_mode_flag) && (app_init)))
+#endif
     {
+#if(NXP_EXTNS == TRUE)
+        NFA_TRACE_DEBUG1 ("nfa_dm_check_set_config () updated_len=%d",updated_len);
+        if(!updated_len)
+        {
+            return NFA_STATUS_OK;
+        }
+#endif
         if ((nfc_status = NFC_SetConfig (updated_len, p_tlv_list)) == NFC_STATUS_OK)
         {
             /* Keep track of whether we will need to notify NFA_DM_SET_CONFIG_EVT on NFC_SET_CONFIG_REVT */
@@ -451,6 +535,28 @@ tNFA_STATUS nfa_dm_check_set_config (UINT8 tlv_list_len, UINT8 *p_tlv_list, BOOL
     }
 }
 
+#if(NXP_EXTNS == TRUE)
+/*******************************************************************************
+**
+** Function         nfa_dm_init_cfgs
+**
+** Description      Initialise config params
+**
+** Returns          None
+**
+*******************************************************************************/
+void nfa_dm_init_cfgs (phNxpNci_getCfg_info_t* mGetCfg_info)
+{
+    NFA_TRACE_DEBUG1 ("%s Enter",__FUNCTION__);
+
+    memcpy (&nfa_dm_cb.params.atr_req_gen_bytes, mGetCfg_info->atr_req_gen_bytes, mGetCfg_info->atr_req_gen_bytes_len);
+    nfa_dm_cb.params.atr_req_gen_bytes_len = (int)mGetCfg_info->atr_req_gen_bytes_len;
+    memcpy (&nfa_dm_cb.params.atr_res_gen_bytes, mGetCfg_info->atr_res_gen_bytes, mGetCfg_info->atr_res_gen_bytes_len);
+    nfa_dm_cb.params.atr_res_gen_bytes_len = (int)mGetCfg_info->atr_res_gen_bytes_len;
+    memcpy (&nfa_dm_cb.params.total_duration, mGetCfg_info->total_duration, mGetCfg_info->total_duration_len);
+    memcpy (&nfa_dm_cb.params.wt, mGetCfg_info->pmid_wt, mGetCfg_info->pmid_wt_len);
+}
+#endif
 #if (BT_TRACE_VERBOSE == TRUE)
 /*******************************************************************************
 **
@@ -492,6 +598,9 @@ static char *nfa_dm_evt_2_str (UINT16 event)
 
     case NFA_DM_API_DISABLE_LISTENING_EVT:
         return "NFA_DM_API_DISABLE_LISTENING_EVT";
+
+    case NFA_DM_API_DISABLE_PASSIVE_LISTENING_EVT:
+        return "NFA_DM_API_DISABLE_PASSIVE_LISTENING_EVT";
 
     case NFA_DM_API_PAUSE_P2P_EVT:
         return "NFA_DM_API_PAUSE_P2P_EVT";

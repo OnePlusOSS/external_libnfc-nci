@@ -16,6 +16,25 @@
  *
  ******************************************************************************/
 
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2015 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -34,6 +53,9 @@
 #include "nfc_int.h"
 #include "gki.h"
 
+#if(NXP_EXTNS == TRUE)
+extern unsigned char appl_dta_mode_flag;
+#endif
 /* Local Functions */
 static tRW_EVENT rw_t1t_handle_rid_rsp (BT_HDR *p_pkt);
 static void rw_t1t_data_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_data);
@@ -67,6 +89,8 @@ static void rw_t1t_data_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_
 #if (BT_TRACE_VERBOSE == TRUE)
     UINT8                   begin_state         = p_t1t->state;
 #endif
+    (void)conn_id;
+    (void)event;
 
     p_pkt = (BT_HDR *) (p_data->data.p_data);
     if (p_pkt == NULL)
@@ -267,6 +291,11 @@ void rw_t1t_conn_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_data)
                 GKI_freebuf ((BT_HDR *) (p_data->data.p_data));
                 p_data->data.p_data = NULL;
             }
+        }else if((p_data != NULL) && (p_data->data.p_data != NULL))
+        {
+        /* Free the response buffer in case of invalid response*/
+            GKI_freebuf((BT_HDR *) (p_data->data.p_data));
+            p_data->data.p_data = NULL;
         }
         /* Data event with error status...fall through to NFC_ERROR_CEVT case */
 
@@ -286,7 +315,7 @@ void rw_t1t_conn_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_data)
                 evt_data.status = NFC_STATUS_FAILED;
 
             evt_data.p_data = NULL;
-            (*rw_cb.p_cback) (RW_T1T_INTF_ERROR_EVT, (tRW_DATA *) &evt_data);
+            (*rw_cb.p_cback) (RW_T1T_INTF_ERROR_EVT, (void *) &evt_data);
             break;
         }
         nfc_stop_quick_timer (&p_t1t->timer);
@@ -535,6 +564,7 @@ tNFC_STATUS rw_t1t_select (UINT8 hr[T1T_HR_LEN], UINT8 uid[T1T_CMD_UID_LEN])
 void rw_t1t_process_timeout (TIMER_LIST_ENT *p_tle)
 {
     tRW_T1T_CB        *p_t1t  = &rw_cb.tcb.t1t;
+    (void)p_tle;
 
 #if (BT_TRACE_VERBOSE == TRUE)
     RW_TRACE_ERROR2 ("T1T timeout. state=%s command (opcode)=0x%02x ", rw_t1t_get_state_name (p_t1t->state), (rw_cb.tcb.t1t.p_cmd_rsp_info)->opcode);
@@ -650,12 +680,12 @@ static void rw_t1t_process_error (void)
         ndef_data.flags     = RW_NDEF_FL_UNKNOWN;
         ndef_data.max_size  = 0;
         ndef_data.cur_size  = 0;
-        (*rw_cb.p_cback) (rw_event, (tRW_DATA *) &ndef_data);
+        (*rw_cb.p_cback) (rw_event, (void *) &ndef_data);
     }
     else
     {
         evt_data.p_data = NULL;
-        (*rw_cb.p_cback) (rw_event, (tRW_DATA *) &evt_data);
+        (*rw_cb.p_cback) (rw_event, (void *) &evt_data);
     }
 }
 
@@ -676,7 +706,7 @@ void rw_t1t_handle_presence_check_rsp (tNFC_STATUS status)
     evt_data.status = status;
     rw_t1t_handle_op_complete ();
 
-    (*(rw_cb.p_cback)) (RW_T1T_PRESENCE_CHECK_EVT, (tRW_DATA *) &evt_data);
+    (*(rw_cb.p_cback)) (RW_T1T_PRESENCE_CHECK_EVT, (void *) &evt_data);
 }
 
 /*****************************************************************************
@@ -694,7 +724,11 @@ void rw_t1t_handle_op_complete (void)
 
     p_t1t->state    = RW_T1T_STATE_IDLE;
 #if (defined (RW_NDEF_INCLUDED) && (RW_NDEF_INCLUDED == TRUE))
+#if(NXP_EXTNS == TRUE)
+    if ((appl_dta_mode_flag == 0) && (p_t1t->state != RW_T1T_STATE_READ_NDEF))
+#else
     if (p_t1t->state != RW_T1T_STATE_READ_NDEF)
+#endif
     {
         p_t1t->b_update = FALSE;
         p_t1t->b_rseg   = FALSE;

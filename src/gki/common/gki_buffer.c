@@ -91,8 +91,11 @@ static void gki_init_free_queue (UINT8 id, UINT16 size, UINT16 total, void *p_me
             hdr          = (BUFFER_HDR_T *)((UINT8 *)hdr + act_size);
             hdr1->p_next = hdr;
         }
-        hdr1->p_next = NULL;
-        p_cb->freeq[id].p_last = hdr1;
+        if(hdr1 != NULL)
+        {
+            hdr1->p_next = NULL;
+            p_cb->freeq[id].p_last = hdr1;
+        }
     }
     return;
 }
@@ -1556,4 +1559,3 @@ UINT16 GKI_poolutilization (UINT8 pool_id)
 
     return ((Q->cur_cnt * 100) / Q->total);
 }
-

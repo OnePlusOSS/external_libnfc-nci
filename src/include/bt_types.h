@@ -263,7 +263,7 @@ typedef struct
 #define UINT24_TO_BE_STREAM(p, u24) {*(p)++ = (UINT8)((u24) >> 16); *(p)++ = (UINT8)((u24) >> 8); *(p)++ = (UINT8)(u24);}
 #define UINT16_TO_BE_STREAM(p, u16) {*(p)++ = (UINT8)((u16) >> 8); *(p)++ = (UINT8)(u16);}
 #define UINT8_TO_BE_STREAM(p, u8)   {*(p)++ = (UINT8)(u8);}
-#define ARRAY_TO_BE_STREAM(p, a, len) {register int ijk; for (ijk = 0; ijk < len; ijk++) *(p)++ = (UINT8) a[ijk];}
+#define ARRAY_TO_BE_STREAM(p, a, len) {register unsigned int ijk; for (ijk = 0; ijk < len; ijk++) *(p)++ = (UINT8) a[ijk];}
 
 #define BE_STREAM_TO_UINT8(u8, p)   {u8 = (UINT8)(*(p)); (p) += 1;}
 #define BE_STREAM_TO_UINT16(u16, p) {u16 = (UINT16)(((UINT16)(*(p)) << 8) + (UINT16)(*((p) + 1))); (p) += 2;}
@@ -443,8 +443,8 @@ typedef struct
 
 /* We will not allocate a PSM in the reserved range to 3rd party apps
 */
-#define BRCM_RESERVED_PSM_START	    0x5AE1
-#define BRCM_RESERVED_PSM_END	    0x5AFF
+#define BRCM_RESERVED_PSM_START     0x5AE1
+#define BRCM_RESERVED_PSM_END       0x5AFF
 
 #define BRCM_UTILITY_SERVICE_PSM    0x5AE1
 #define BRCM_MATCHER_PSM            0x5AE3
@@ -485,7 +485,7 @@ typedef struct
 #define AMP_USE_AMP_ONLY                       6   /* Only use AMP, never use BR/EDR                               */
 #define AMP_USE_AMP_MAX_DEF            AMP_USE_AMP_ONLY /* Maximum enum defined for AMP Criteria                        */
 
-#define	AMP_AUTOSWITCH_ALLOWED 		           0x80000000  /* flag to indicate that this connection is auto-switch ready */
+#define AMP_AUTOSWITCH_ALLOWED                 0x80000000  /* flag to indicate that this connection is auto-switch ready */
 #define AMP_USE_CURRENT_CRITERIA               0xFFFFFFFF  /* Flag if previous criteria was to be still used        */
 
 typedef UINT32 tAMP_CRITERIA;
@@ -613,7 +613,7 @@ typedef UINT8 tBT_DEVICE_TYPE;
 #define TRACE_ORG_USER_SCR          0x00000800
 #define TRACE_ORG_TESTER            0x00000900
 #define TRACE_ORG_MAX_NUM           10          /* 32-bit mask; must be < 32 */
-#define TRACE_LITE_ORG_MAX_NUM		6
+#define TRACE_LITE_ORG_MAX_NUM      6
 #define TRACE_ORG_ALL               0x03ff
 #define TRACE_ORG_RPC_TRANS         0x04
 
@@ -707,4 +707,3 @@ typedef UINT8 tBT_DEVICE_TYPE;
 typedef void (BT_LOG_FUNC) (int trace_type, const char *fmt_str, ...);
 
 #endif
-

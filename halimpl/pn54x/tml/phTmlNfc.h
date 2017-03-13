@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2014 NXP Semiconductors
+ * Copyright (C) 2015 NXP Semiconductors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,7 +99,23 @@ typedef enum
     phTmlNfc_e_Invalid = 0,
     phTmlNfc_e_ResetDevice = PH_TMLNFC_RESETDEVICE, /* Reset the device */
     phTmlNfc_e_EnableDownloadMode, /* Do the hardware setting to enter into download mode */
-    phTmlNfc_e_EnableNormalMode /* Hardware setting for normal mode of operation */
+    phTmlNfc_e_EnableNormalMode/* Hardware setting for normal mode of operation */
+#if(NFC_NXP_ESE == TRUE)
+    ,phTmlNfc_e_SetNfcServicePid, /* Register the Nfc service PID with the driver */
+    phTmlNfc_e_GetP61PwrMode, /* Get the current P61 mode of operation */
+    phTmlNfc_e_SetP61WiredMode, /* Set the current P61 mode of operation to Wired*/
+    phTmlNfc_e_SetP61IdleMode, /* Set the current P61 mode of operation to Idle*/
+    phTmlNfc_e_SetP61DisableMode, /* Set the ese vdd gpio to low*/
+    phTmlNfc_e_SetP61EnableMode, /* Set the ese vdd gpio to high*/
+    phTmlNfc_e_RelP61Access, /*Release the P61 lock*/
+#if ((NFC_NXP_CHIP_TYPE == PN548C2) || (NFC_NXP_CHIP_TYPE == PN551))
+    phTmlNfc_e_RelP61SvddWait,
+#endif
+    phTmlNfc_e_P73IsoRstMode,         /* ISO RST of P73*/
+    phTmlNfc_e_SetLegacyPowerScheme,
+    phTmlNfc_e_SetExtPMUPowerScheme,
+    phTmlNfc_e_SetPN67TPowerScheme,
+#endif
 } phTmlNfc_ControlCode_t ;  /* Control code for IOCTL call */
 
 /*
@@ -202,6 +218,7 @@ NFCSTATUS phTmlNfc_Read(uint8_t *pBuffer, uint16_t wLength, pphTmlNfc_TransactCo
 NFCSTATUS phTmlNfc_WriteAbort(void);
 NFCSTATUS phTmlNfc_ReadAbort(void);
 NFCSTATUS phTmlNfc_IoCtl(phTmlNfc_ControlCode_t eControlCode);
+NFCSTATUS phTmlNfc_get_ese_access(void *pDevHandle, long timeout);
 void phTmlNfc_DeferredCall(uintptr_t dwThreadId, phLibNfc_Message_t *ptWorkerMsg);
 void phTmlNfc_ConfigNciPktReTx( phTmlNfc_ConfigRetrans_t eConfig, uint8_t bRetryCount);
 void phTmlNfc_set_fragmentation_enabled(phTmlNfc_i2cfragmentation_t enable);
